@@ -54,7 +54,7 @@ metadata:
   name: k6-scripts
 data:
   test-harbor-with-metrics.js: |
-    // Contenido del script test-harbor-with-metrics.js mostrado arriba
+    // Contenido del script test-harbor-with-metrics.js en spec
 
 ---
 
