@@ -1,0 +1,119 @@
+# k6-prometheus-grafana.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k6-prometheus
+  labels:
+    app: k6-prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k6-prometheus
+  template:
+    metadata:
+      labels:
+        app: k6-prometheus
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5656"
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["sh", "-c"]
+        args:
+          - k6 run --out experimental-prometheus-rw --tag testid=$$(date +%s) /scripts/test-harbor-with-metrics.js;
+            sleep infinity
+        volumeMounts:
+        - name: k6-scripts
+          mountPath: /scripts
+        ports:
+        - containerPort: 5656
+      - name: prometheus
+        image: prom/prometheus:latest
+        ports:
+        - containerPort: 9090
+        volumeMounts:
+        - name: prometheus-config
+          mountPath: /etc/prometheus/prometheus.yml
+          subPath: prometheus.yml
+      volumes:
+      - name: k6-scripts
+        configMap:
+          name: k6-scripts
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-scripts
+data:
+  test-harbor-with-metrics.js: |
+    // Contenido del script test-harbor-with-metrics.js mostrado arriba
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    scrape_configs:
+      - job_name: 'k6'
+        static_configs:
+          - targets: ['localhost:5656']
+        metrics_path: '/metrics'
+    
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: k6-prometheus-service
+spec:
+  selector:
+    app: k6-prometheus
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+      name: prometheus
+    - protocol: TCP
+      port: 5656
+      targetPort: 5656
+      name: k6-metrics
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: k6-prometheus-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  rules:
+  - host: k6-monitoring.yourdomain.com
+    http:
+      paths:
+      - path: /prometheus(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: k6-prometheus-service
+            port:
+              number: 9090
