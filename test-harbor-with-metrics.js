@@ -2,7 +2,7 @@
 import { check, sleep } from 'k6';
 import exec from 'k6/x/exec';
 import { Counter, Rate, Trend } from 'k6/metrics';
-import { check } from 'k6';
+//import { check } from 'k6';
 
 // Métricas personalizadas
 const successfulPushes = new Counter('harbor_successful_pushes');
