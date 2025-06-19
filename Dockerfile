@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install xk6
 RUN go install go.k6.io/xk6/cmd/xk6@latest
-
+RUN apk add --no-cache git
 # Build k6 with the exec extension
 # Ensure you have the correct version for k6 if needed, otherwise 'latest' will be used by xk6
 RUN xk6 build --with github.com/k6io/xk6-exec
