@@ -1,5 +1,5 @@
-# Stage 1: Build k6 with xk6-exec extension using Go 1.24
-FROM golang:1.24rc1-alpine AS builder
+# Stage 1: Build k6 with xk6-exec extension
+FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
 
@@ -10,16 +10,17 @@ RUN apk add --no-cache git ca-certificates
 ENV CGO_ENABLED=0
 ENV GOOS=linux
 
-# Install xk6 latest (now compatible with Go 1.24)
-RUN go install go.k6.io/xk6/cmd/xk6@latest
+# Install xk6 - using older stable version
+RUN go install go.k6.io/xk6/cmd/xk6@v0.8.1
 
-# Build k6 with the exec extension
+# Build k6 with the exec extension using known working versions
 RUN xk6 build \
-    --with github.com/grafana/xk6-exec@latest \
+    --with github.com/k6io/xk6-exec@v0.1.1 \
+    --k6-version v0.45.0 \
     --output /app/k6
 
 # Stage 2: Create the final k6 image
-FROM grafana/k6:latest
+FROM grafana/k6:0.45.0
 
 # Copy the custom k6 binary from the builder stage
 COPY --from=builder /app/k6 /usr/bin/k6
