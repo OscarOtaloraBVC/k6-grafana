@@ -21,11 +21,14 @@ RUN xk6 build \
 # Stage 2: Create the final k6 image
 FROM grafana/k6:0.45.0
 
-# Copy the custom k6 binary from the builder stage
-COPY --from=builder /app/k6 /usr/bin/k6
+# Copy the custom k6 binary from the builder stage to a writable location
+COPY --from=builder /app/k6 /usr/local/bin/k6
 
 # Make sure the binary is executable
-RUN chmod +x /usr/bin/k6
+RUN chmod +x /usr/local/bin/k6
+
+# Update PATH to prioritize our custom k6 binary
+ENV PATH="/usr/local/bin:$PATH"
 
 # Verify the build worked
 RUN k6 version
