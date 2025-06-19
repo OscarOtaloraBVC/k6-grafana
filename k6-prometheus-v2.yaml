@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: k6-prometheus-grafana
+  name: k6-prometheus
   labels:
-    app: k6-monitoring
+    app: k6-prometheus
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: k6-monitoring
+      app: k6-prometheus
   template:
     metadata:
       labels:
-        app: k6-monitoring
+        app: k6-prometheus
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
+        prometheus.io/port: "5656"
     spec:
       containers:
       - name: k6
@@ -23,46 +23,29 @@ spec:
         command: ["sh", "-c"]
         args:
           - |
-            echo "Starting k6 test...";
-            k6 run --out experimental-prometheus-rw=serverUrl=http://localhost:9090/api/v1/write,tag=testid=$(date +%s) /scripts/test-harbor-with-metrics.js;
-            echo "Test completed. Keeping container alive...";
+            export K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write
+            k6 run --out experimental-prometheus-rw --tag testid=$$(date +%s) /scripts/test-harbor-with-metrics.js
             sleep infinity
         volumeMounts:
         - name: k6-scripts
           mountPath: /scripts
+        ports:
+        - containerPort: 5656
+          name: k6-metrics
         env:
-        - name: K6_PROMETHEUS_RW_SERVER_URL
-          value: "http://localhost:9090/api/v1/write"
-        
+        - name: K6_PROMETHEUS_RW_TREND_STATS
+          value: "p(95),p(50),min,max,avg"
       - name: prometheus
         image: prom/prometheus:latest
         ports:
         - containerPort: 9090
+          name: prometheus
         volumeMounts:
         - name: prometheus-config
           mountPath: /etc/prometheus/prometheus.yml
           subPath: prometheus.yml
-        args:
-          - "--config.file=/etc/prometheus/prometheus.yml"
-          - "--storage.tsdb.path=/prometheus"
-          - "--web.console.libraries=/usr/share/prometheus/console_libraries"
-          - "--web.console.templates=/usr/share/prometheus/consoles"
-        
-      - name: grafana
-        image: grafana/grafana:latest
-        ports:
-        - containerPort: 3000
-        volumeMounts:
-        - name: grafana-storage
-          mountPath: /var/lib/grafana
-        env:
-        - name: GF_SECURITY_ADMIN_USER
-          value: "admin"
-        - name: GF_SECURITY_ADMIN_PASSWORD
-          value: "admin"
-        - name: GF_PATHS_PROVISIONING
-          value: "/etc/grafana/provisioning"
-        
+        - name: prometheus-data
+          mountPath: /prometheus
       volumes:
       - name: k6-scripts
         configMap:
@@ -70,7 +53,7 @@ spec:
       - name: prometheus-config
         configMap:
           name: prometheus-config
-      - name: grafana-storage
+      - name: prometheus-data
         emptyDir: {}
 
 ---
@@ -90,61 +73,58 @@ data:
     const pushDuration = new Trend('harbor_push_duration_ms');
 
     export const options = {
-        scenarios: {
-            constant_load: {
-                executor: 'constant-arrival-rate',
-                rate: 10,
-                timeUnit: '1s',
-                duration: '5m',
-                preAllocatedVUs: 10,
-                maxVUs: 50,
-            },
+      scenarios: {
+        constant_load: {
+          executor: 'constant-arrival-rate',
+          rate: 10,
+          timeUnit: '1s',
+          duration: '5m',
+          preAllocatedVUs: 10,
+          maxVUs: 50,
         },
-        ext: {
-            'loadimpact': {
-                'name': 'Harbor Push Test',
-            }
-        }
+      },
+      tags: {
+        testid: __ENV.testid,
+      }
     };
 
     function simulateHarborPush() {
-        const start = Date.now();
-        const testid = `test-${__VU}`;
-        
-        const url = 'http://harbor-service/api/v2.0/projects';
-        const payload = JSON.stringify({
-            project_name: `test-project-${__VU}-${__ITER}`,
-        });
-        
-        const params = {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Basic ' + btoa('username:password'),
-            },
-            tags: { testid: testid },
-        };
-        
-        const res = http.post(url, payload, params);
-        const duration = Date.now() - start;
-        
-        pushDuration.add(duration, { testid: testid });
-        
-        if (res.status === 201) {
-            successfulPushes.add(1, { testid: testid });
-        } else {
-            failedPushes.add(1, { testid: testid });
-        }
-        
-        check(res, {
-            'status is 201': (r) => r.status === 201,
-        });
-        
-        return duration;
+      const start = Date.now();
+      const testid = __ENV.testid;
+      
+      const url = 'http://harbor-service/api/v2.0/projects';
+      const payload = JSON.stringify({
+        project_name: `test-project-${__VU}-${__ITER}`,
+      });
+      
+      const params = {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        tags: { testid: testid },
+      };
+      
+      const res = http.post(url, payload, params);
+      const duration = Date.now() - start;
+      
+      pushDuration.add(duration, { testid: testid });
+      
+      if (res.status === 201) {
+        successfulPushes.add(1, { testid: testid });
+      } else {
+        failedPushes.add(1, { testid: testid });
+      }
+      
+      check(res, {
+        'status is 201': (r) => r.status === 201,
+      });
+      
+      return duration;
     }
 
     export default function () {
-        simulateHarborPush();
-        sleep(0.1);
+      simulateHarborPush();
+      sleep(0.1);
     }
 
 ---
@@ -164,44 +144,39 @@ data:
         static_configs:
           - targets: ['localhost:5656']
         metrics_path: '/metrics'
-      
+    
       - job_name: 'prometheus'
         static_configs:
           - targets: ['localhost:9090']
 
-      - job_name: 'grafana'
-        static_configs:
-          - targets: ['localhost:3000']
+    remote_write:
+      - url: http://k6-prometheus-service:9090/api/v1/write
 
 ---
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: k6-monitoring-service
+  name: k6-prometheus-service
 spec:
   selector:
-    app: k6-monitoring
+    app: k6-prometheus
   ports:
-    - name: prometheus
-      protocol: TCP
+    - protocol: TCP
       port: 9090
       targetPort: 9090
-    - name: grafana
-      protocol: TCP
-      port: 3000
-      targetPort: 3000
-    - name: k6-metrics
-      protocol: TCP
+      name: prometheus
+    - protocol: TCP
       port: 5656
       targetPort: 5656
+      name: k6-metrics
 
 ---
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: k6-monitoring-ingress
+  name: k6-prometheus-ingress
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$1
 spec:
@@ -213,13 +188,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: k6-monitoring-service
+            name: k6-prometheus-service
             port:
               number: 9090
-      - path: /grafana(/|$)(.*)
-        pathType: Prefix
-        backend:
-          service:
-            name: k6-monitoring-service
-            port:
-              number: 3000
