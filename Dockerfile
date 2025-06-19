@@ -13,9 +13,9 @@ ENV GOOS=linux
 # Install xk6 - using older stable version
 RUN go install go.k6.io/xk6/cmd/xk6@v0.8.1
 
-# Build k6 with the exec extension - using valid version
+# Build k6 with the exec extension - using correct module path
 RUN xk6 build \
-    --with github.com/k6io/xk6-exec@v0.4.2 \
+    --with github.com/grafana/xk6-exec@v0.4.2 \
     --output /app/k6
 
 # Stage 2: Create the final k6 image
