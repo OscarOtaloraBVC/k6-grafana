@@ -18,7 +18,7 @@ spec:
         command: ["sh", "-c"]
         args:
           - |
-            export K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write
+            export K6_PROMETHEUS_RW_SERVER_URL=http://k6-prometheus-service:9090/api/v1/write
             k6 run --out experimental-prometheus-rw /scripts/test-harbor-with-metrics.js
             sleep infinity
         volumeMounts:
@@ -138,7 +138,7 @@ data:
     scrape_configs:
       - job_name: 'k6'
         static_configs:
-          - targets: ['localhost:5656']
+          - targets: ['k6-prometheus-service:5656']
         metrics_path: '/metrics'
 
 ---
