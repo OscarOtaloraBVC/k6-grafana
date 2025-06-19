@@ -1,15 +1,23 @@
 # Stage 1: Build k6 with xk6-exec extension
-FROM golang:1.24-alpine AS builder 
-# Changed to Go 1.24 (or higher if 1.24-alpine isn't available, check Docker Hub)
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
+# Install required packages
+RUN apk add --no-cache git ca-certificates
+
+# Set Go environment variables
+ENV CGO_ENABLED=0
+ENV GOOS=linux
+
 # Install xk6
 RUN go install go.k6.io/xk6/cmd/xk6@latest
-RUN apk add --no-cache git
-# Build k6 with the exec extension
-# Ensure you have the correct version for k6 if needed, otherwise 'latest' will be used by xk6
-RUN xk6 build --with github.com/k6io/xk6-exec
+
+# Build k6 with the exec extension using specific version
+# Using a specific version instead of latest to avoid compatibility issues
+RUN xk6 build \
+    --with github.com/grafana/xk6-exec@latest \
+    --output /app/k6
 
 # Stage 2: Create the final k6 image
 FROM grafana/k6:latest
@@ -17,5 +25,11 @@ FROM grafana/k6:latest
 # Copy the custom k6 binary from the builder stage
 COPY --from=builder /app/k6 /usr/bin/k6
 
-# (Optional) Set entrypoint if you always want to run k6
-# ENTRYPOINT ["k6"]
+# Make sure the binary is executable
+RUN chmod +x /usr/bin/k6
+
+# Verify the build worked
+RUN k6 version
+
+# Set entrypoint
+ENTRYPOINT ["k6"]
