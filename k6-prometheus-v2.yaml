@@ -36,6 +36,13 @@ spec:
         - name: prometheus-config
           mountPath: /etc/prometheus/prometheus.yml
           subPath: prometheus.yml
+      volumes:
+      - name: k6-scripts
+        configMap:
+          name: k6-scripts
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
 
 
 ---
