@@ -1,3 +1,5 @@
+USER root
+RUN whoami && ls -l /usr/local/bin
 # Stage 1: Build k6 with xk6-exec extension
 FROM golang:1.21-alpine AS builder
 
@@ -22,7 +24,7 @@ RUN xk6 build \
 FROM grafana/k6:0.45.0
 
 # Copy the custom k6 binary from the builder stage to a writable location
-COPY --from=builder /app/k6 /usr/local/bin/k6
+COPY --from=builder --chown=root:root /app/k6 /usr/local/bin/k6
 
 # Make sure the binary is executable
 RUN chmod +x /usr/local/bin/k6
