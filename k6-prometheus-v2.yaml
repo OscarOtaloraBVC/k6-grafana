@@ -18,7 +18,7 @@ spec:
         command: ["sh", "-c"]
         args:
           - |
-            export K6_PROMETHEUS_RW_SERVER_URL=http://k6-prometheus-service:9090/api/v1/write
+            export K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write
             k6 run --out experimental-prometheus-rw /scripts/test-harbor-with-metrics.js
             sleep infinity
         volumeMounts:
@@ -36,6 +36,13 @@ spec:
         - name: prometheus-config
           mountPath: /etc/prometheus/prometheus.yml
           subPath: prometheus.yml
+        # Add liveness probe
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 10
       volumes:
       - name: k6-scripts
         configMap:
@@ -126,15 +133,13 @@ data:
   prometheus.yml: |
     global:
       scrape_interval: 15s
+      evaluation_interval: 15s
 
     scrape_configs:
       - job_name: 'k6'
         static_configs:
           - targets: ['localhost:5656']
         metrics_path: '/metrics'
-
-    remote_write:
-      - url: http://localhost:9090/api/v1/write
 
 ---
 
