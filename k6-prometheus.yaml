@@ -67,6 +67,9 @@ data:
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
+
+    remote_write:
+      - url: http://k6-prometheus-service:9090/api/v1/write
     
     scrape_configs:
       - job_name: 'k6'
