@@ -18,7 +18,7 @@
   "links": [],
   "panels": [
     {
-      "title": "HTTP Request Status",
+      "title": "Total Requests",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -28,7 +28,7 @@
       },
       "targets": [
         {
-          "expr": "sum(checks_total) by (testid)",
+          "expr": "sum(total_requests)",
           "format": "time_series",
           "instant": true,
           "interval": "",
@@ -67,7 +67,7 @@
       }
     },
     {
-      "title": "HTTP Success Rate",
+      "title": "Checks Success Rate",
       "type": "stat",
       "gridPos": {
         "h": 4,
@@ -156,91 +156,17 @@
       }
     },
     {
-      "title": "HTTP Request Duration (p95)",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "targets": [
-        {
-          "expr": "http_req_duration{p=95}",
-          "interval": "",
-          "legendFormat": "p95",
-          "refId": "A"
-        },
-        {
-          "expr": "300",
-          "interval": "",
-          "legendFormat": "Threshold (300ms)",
-          "refId": "B"
-        }
-      ],
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        },
-        "overrides": []
-      }
-    },
-    {
-      "title": "Failed Requests Rate",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "targets": [
-        {
-          "expr": "http_req_failed",
-          "interval": "",
-          "legendFormat": "Failed Requests",
-          "refId": "A"
-        },
-        {
-          "expr": "0.1",
-          "interval": "",
-          "legendFormat": "Threshold (10%)",
-          "refId": "B"
-        }
-      ],
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit"
-        },
-        "overrides": []
-      }
-    },
-    {
       "title": "Authentication Metrics",
       "type": "graph",
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 8
       },
       "targets": [
         {
-          "expr": "auth_duration{p=95}",
+          "expr": "auth_duration{quantile=\"0.95\"}",
           "interval": "",
           "legendFormat": "Auth Duration p95",
           "refId": "A"
@@ -286,6 +212,118 @@
       }
     },
     {
+      "title": "HTTP Request Metrics",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "http_req_duration{quantile=\"0.95\"}",
+          "interval": "",
+          "legendFormat": "HTTP Req Duration p95",
+          "refId": "A"
+        },
+        {
+          "expr": "500",
+          "interval": "",
+          "legendFormat": "Threshold (500ms)",
+          "refId": "B"
+        },
+        {
+          "expr": "http_req_failed",
+          "interval": "",
+          "legendFormat": "Failed Requests Rate",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed Requests Rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "title": "Manifest Pull Metrics",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "manifest_pull_duration{quantile=\"0.95\"}",
+          "interval": "",
+          "legendFormat": "Manifest Pull Duration p95",
+          "refId": "A"
+        },
+        {
+          "expr": "400",
+          "interval": "",
+          "legendFormat": "Threshold (400ms)",
+          "refId": "B"
+        },
+        {
+          "expr": "manifest_pull_success",
+          "interval": "",
+          "legendFormat": "Manifest Pull Success Rate",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Manifest Pull Success Rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "title": "Iteration Duration",
       "type": "graph",
       "gridPos": {
@@ -296,13 +334,13 @@
       },
       "targets": [
         {
-          "expr": "iteration_duration{p=95}",
+          "expr": "iteration_duration{quantile=\"0.95\"}",
           "interval": "",
           "legendFormat": "p95",
           "refId": "A"
         },
         {
-          "expr": "iteration_duration{avg}",
+          "expr": "avg(iteration_duration)",
           "interval": "",
           "legendFormat": "avg",
           "refId": "B"
@@ -320,6 +358,129 @@
           "unit": "ms"
         },
         "overrides": []
+      }
+    },
+    {
+      "title": "Checks Summary",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "sum(checks_total)",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "Total Checks",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(checks_succeeded)",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "Succeeded Checks",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(checks_failed)",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "Failed Checks",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(checks_succeeded) / sum(checks_total) * 100",
+          "format": "table",
+          "instant": true,
+          "interval": "",
+          "legendFormat": "Success Rate",
+          "refId": "D"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "sortBy": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Success Rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total Checks"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Succeeded Checks"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed Checks"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
       }
     }
   ],
