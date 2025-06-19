@@ -1,5 +1,5 @@
 # Stage 1: Build k6 with xk6-exec extension
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder # Changed to Go 1.24 (or higher if 1.24-alpine isn't available, check Docker Hub)
 
 WORKDIR /app
 
