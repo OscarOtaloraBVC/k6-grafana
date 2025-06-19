@@ -1,5 +1,3 @@
-USER root
-RUN whoami && ls -l /usr/local/bin
 # Stage 1: Build k6 with xk6-exec extension
 FROM golang:1.21-alpine AS builder
 
