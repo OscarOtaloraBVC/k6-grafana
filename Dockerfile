@@ -1,3 +1,5 @@
+FROM grafana/k6:latest
+RUN apk add --no-cache docker-cli
 # Stage 1: Build k6 with xk6-exec extension
 FROM golang:1.21-alpine AS builder
 
