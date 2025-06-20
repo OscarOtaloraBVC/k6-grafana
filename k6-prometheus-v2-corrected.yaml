@@ -23,11 +23,14 @@ spec:
             k6 run --out experimental-prometheus-rw /scripts/01_harbor_pull_test_grafana.js
             sleep infinity
         ports:
-          - containerPort: 5656
-            name: metrics
+        - containerPort: 5656
+          name: metrics
         volumeMounts:
         - name: k6-scripts
           mountPath: /scripts
+        env:
+        - name: K6_PROMETHEUS_RW_INSECURE_SKIP_TLS_VERIFY
+          value: "true"
           
       - name: prometheus
         image: prom/prometheus:latest
@@ -63,8 +66,8 @@ data:
     import { check, sleep } from 'k6';
     import { Counter, Trend } from 'k6/metrics';
 
-    const successfulPushes = new Counter('harbor_successful_pushes_total');
-    const failedPushes = new Counter('harbor_failed_pushes_total');
+    const successfulPushes = new Counter('harbor_successful_pushes');
+    const failedPushes = new Counter('harbor_failed_pushes');
     const pushDuration = new Trend('harbor_push_duration_ms');
 
     export const options = {
@@ -77,11 +80,6 @@ data:
           preAllocatedVUs: 10,
           maxVUs: 50,
         },
-      },
-      ext: {
-        loadimpact: {
-          name: 'Harbor Push Test'
-        }
       }
     };
 
@@ -102,13 +100,12 @@ data:
       const res = http.post(url, payload, params);
       const duration = Date.now() - start;
       
-      // Usamos valores primitivos para las etiquetas
-      pushDuration.add(duration, { testid: String(__ENV.testid || 'default') });
+      pushDuration.add(duration);
       
       if (res.status === 201) {
-        successfulPushes.add(1, { testid: String(__ENV.testid || 'default') });
+        successfulPushes.add(1);
       } else {
-        failedPushes.add(1, { testid: String(__ENV.testid || 'default') });
+        failedPushes.add(1);
       }
       
       check(res, {
@@ -137,6 +134,10 @@ data:
 
     remote_write:
       - url: http://localhost:9090/api/v1/write
+        queue_config:
+          max_samples_per_send: 1000
+          capacity: 10000
+          max_shards: 300
 
     scrape_configs:
       - job_name: 'k6'
@@ -144,6 +145,7 @@ data:
           - targets: ['localhost:5656']
         metrics_path: '/metrics'
         honor_labels: true
+        scheme: http
 
 ---
 
@@ -163,24 +165,3 @@ spec:
       port: 5656
       targetPort: 5656
       name: k6-metrics
-
----
-
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: k6-prometheus-ingress
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$1
-spec:
-  rules:
-  - host: k6-monitoring.yourdomain.com
-    http:
-      paths:
-      - path: /prometheus(/|$)(.*)
-        pathType: Prefix
-        backend:
-          service:
-            name: k6-prometheus-service
-            port:
-              number: 9090
