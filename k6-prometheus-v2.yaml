@@ -61,7 +61,7 @@ kind: ConfigMap
 metadata:
   name: k6-scripts
 data:
-  test-harbor-with-metrics.js: |
+  01_harbor_pull_test_grafana.js: |
     import http from 'k6/http';
     import { check, sleep } from 'k6';
     import { Counter, Trend } from 'k6/metrics';
