@@ -18,12 +18,16 @@ spec:
         command: ["sh", "-c"]
         args:
           - |
-            # Usando el servicio DNS interno de Kubernetes para conectar con Prometheus
-            export K6_PROMETHEUS_RW_SERVER_URL=http://127.0.0.1:9090/api/v1/write
+            # Configurar variables de entorno para k6
+            export K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write
             export K6_PROMETHEUS_RW_TREND_STATS="p(95),p(50),min,max,avg"
-            export K6_PROMETHEUS_RW_INSECURE_SKIP_TLS_VERIFY="true"
-            k6 run --out experimental-prometheus-rw /scripts/01_harbor_pull_test_grafana.js
-            sleep infinity
+            export K6_PROMETHEUS_RW_INSECURE_SKIP_TLS_VERIFY=true
+            
+            # Ejecutar k6 con output a Prometheus
+            k6 run --out experimental-prometheus-rw /scripts/01_harbor_pull_test_grafana.js &
+            
+            # Mantener el contenedor activo
+            wait
         ports:
         - containerPort: 5656
           name: metrics
@@ -37,11 +41,15 @@ spec:
         - containerPort: 9090
         volumeMounts:
         - name: prometheus-config
-          mountPath: /etc/prometheus/prometheus.yml
-          subPath: prometheus.yml
-        args:
-        - '--web.enable-remote-write-receiver'  # Habilita el endpoint de remote write
-        - '--enable-feature=remote-write-receiver'  # Asegura compatibilidad
+          mountPath: /etc/prometheus
+        command:
+        - '/bin/prometheus'
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+        - '--web.console.templates=/etc/prometheus/consoles'
+        - '--web.enable-lifecycle'
+        - '--web.enable-remote-write-receiver'  # Importante para recibir métricas de k6
         livenessProbe:
           httpGet:
             path: /-/healthy
@@ -68,41 +76,17 @@ data:
       scrape_interval: 15s
       evaluation_interval: 15s
 
+    # Remover la configuración de remote_write circular
+    # remote_write se maneja desde k6 directamente
+
     scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      # Si k6 expone métricas en formato Prometheus también
       - job_name: 'k6-metrics'
         static_configs:
           - targets: ['localhost:5656']
         metrics_path: '/metrics'
-        honor_labels: true
-        scheme: http
-
-    # Configuración adicional para remote write
-    remote_write:
-    - url: http://localhost:9090/api/v1/write
-      queue_config:
-        max_samples_per_send: 1000
-        capacity: 10000
-        max_shards: 300
-      write_relabel_configs:
-      - source_labels: [__name__]
-        regex: 'harbor_.*'
-        action: keep
-
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: k6-prometheus-service
-spec:
-  selector:
-    app: k6-prometheus
-  ports:
-    - protocol: TCP
-      port: 9090
-      targetPort: 9090
-      name: prometheus
-    - protocol: TCP
-      port: 5656
-      targetPort: 5656
-      name: k6-metrics
+        scrape_interval: 5s
