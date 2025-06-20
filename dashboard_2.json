@@ -18,6 +18,26 @@
   "links": [],
   "panels": [
     {
+      "title": "Authentication Duration",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "k6_auth_duration_ms",
+          "legendFormat": "Auth Duration"
+        }
+      ]
+    },
+    {
+      "title": "Manifest Pull Success Rate",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "rate(k6_manifest_pull_success[1m])",
+          "legendFormat": "Success Rate"
+        }
+      ]
+    },
+    {
       "title": "Total Requests",
       "type": "stat",
       "gridPos": {

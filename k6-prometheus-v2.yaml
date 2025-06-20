@@ -18,9 +18,11 @@ spec:
         command: ["sh", "-c"]
         args:
           - |
-            export K6_PROMETHEUS_RW_SERVER_URL=http://k6-prometheus-service:9090/api/v1/write
-            k6 run --out experimental-prometheus-rw /scripts/test-harbor-with-metrics.js
+            k6 run --out prometheus=namespace=k6,serverUrl=http://localhost:9090/api/v1/write /scripts/01_harbor_pull_test_grafana.js
             sleep infinity
+
+        ports:
+          - containerPort: 5656
         volumeMounts:
         - name: k6-scripts
           mountPath: /scripts
@@ -134,6 +136,9 @@ data:
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
+
+    remote_write:
+      - url: http://localhost:9090/api/v1/write
 
     scrape_configs:
       - job_name: 'k6'
