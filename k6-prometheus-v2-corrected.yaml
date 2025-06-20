@@ -78,9 +78,6 @@ data:
           maxVUs: 50,
         },
       },
-      tags: {
-        testid: __ENV.testid,
-      },
       ext: {
         loadimpact: {
           name: 'Harbor Push Test'
@@ -90,7 +87,6 @@ data:
 
     function simulateHarborPush() {
       const start = Date.now();
-      const testid = __ENV.testid;
       
       const url = 'http://harbor-service/api/v2.0/projects';
       const payload = JSON.stringify({
@@ -100,19 +96,19 @@ data:
       const params = {
         headers: {
           'Content-Type': 'application/json',
-        },
-        tags: { testid: testid },
+        }
       };
       
       const res = http.post(url, payload, params);
       const duration = Date.now() - start;
       
-      pushDuration.add(duration, { testid: testid });
+      // Usamos valores primitivos para las etiquetas
+      pushDuration.add(duration, { testid: String(__ENV.testid || 'default') });
       
       if (res.status === 201) {
-        successfulPushes.add(1, { testid: testid });
+        successfulPushes.add(1, { testid: String(__ENV.testid || 'default') });
       } else {
-        failedPushes.add(1, { testid: testid });
+        failedPushes.add(1, { testid: String(__ENV.testid || 'default') });
       }
       
       check(res, {
