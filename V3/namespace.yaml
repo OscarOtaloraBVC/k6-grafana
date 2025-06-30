@@ -1,0 +1,7 @@
+# namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k6-monitoring
+  labels:
+    name: k6-monitoring

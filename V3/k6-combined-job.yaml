@@ -1,0 +1,76 @@
+# k6-combined-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-combined-test
+  namespace: k6-monitoring
+spec:
+  template:
+    metadata:
+      labels:
+        app: k6-runner
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6"]
+        args: [
+          "run",
+          "--out", "prometheus=http://k6-output-service:6565",
+          "/scripts/combined-test.js"
+        ]
+        env:
+        - name: HARBOR_URL
+          value: "https://harbor.example.com"
+        - name: HARBOR_USER
+          value: "admin"
+        - name: HARBOR_PASS
+          value: "password"
+        - name: HARBOR_PROJECT
+          value: "library"
+        - name: HARBOR_IMAGE
+          value: "nginx"
+        - name: HARBOR_TAG
+          value: "latest"
+        - name: ARTIFACTORY_URL
+          value: "https://artifactory.example.com"
+        - name: ARTIFACTORY_USER
+          value: "admin"
+        - name: ARTIFACTORY_PASS
+          value: "password"
+        - name: ARTIFACTORY_REPO
+          value: "generic-local"
+        - name: ARTIFACTORY_FILE
+          value: "test/testfile-30mb.bin"
+        - name: VAULT_URL
+          value: "https://vault.example.com"
+        - name: VAULT_TOKEN
+          value: "s.1234567890abcdef"
+        - name: VAULT_SECRET_PATH
+          value: "secret/data/test"
+        - name: KEYCLOAK_URL
+          value: "https://keycloak.example.com"
+        - name: KEYCLOAK_REALM
+          value: "master"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "admin-cli"
+        - name: KEYCLOAK_USER
+          value: "admin"
+        - name: KEYCLOAK_PASS
+          value: "password"
+        volumeMounts:
+        - name: k6-scripts
+          mountPath: /scripts
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      volumes:
+      - name: k6-scripts
+        configMap:
+          name: k6-scripts
+      restartPolicy: Never
+  backoffLimit: 4

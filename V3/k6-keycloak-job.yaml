@@ -1,0 +1,48 @@
+# k6-keycloak-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-keycloak-test
+  namespace: k6-monitoring
+spec:
+  template:
+    metadata:
+      labels:
+        app: k6-runner
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6"]
+        args: [
+          "run",
+          "--out", "prometheus=http://k6-output-service:6565",
+          "/scripts/keycloak-test.js"
+        ]
+        env:
+        - name: KEYCLOAK_URL
+          value: "https://keycloak.example.com"
+        - name: KEYCLOAK_REALM
+          value: "master"
+        - name: KEYCLOAK_CLIENT_ID
+          value: "admin-cli"
+        - name: KEYCLOAK_USER
+          value: "admin"
+        - name: KEYCLOAK_PASS
+          value: "password"
+        volumeMounts:
+        - name: k6-scripts
+          mountPath: /scripts
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: k6-scripts
+        configMap:
+          name: k6-scripts
+      restartPolicy: Never
+  backoffLimit: 4

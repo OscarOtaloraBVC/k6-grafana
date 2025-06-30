@@ -1,0 +1,723 @@
+# grafana-dashboard-files.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-files
+  namespace: k6-monitoring
+data:
+  k6-harbor-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "K6 Harbor Load Test",
+        "tags": ["k6", "harbor", "load-testing"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Virtual Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_vus",
+                "legendFormat": "Active VUs"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 50},
+                    {"color": "red", "value": 100}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Request Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(k6_http_reqs_total[1m])",
+                "legendFormat": "Requests/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Response Time",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.95\"}",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.50\"}",
+                "legendFormat": "50th percentile"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Error Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_http_reqs_total{status!~\"2..\"}[1m]) / rate(k6_http_reqs_total[1m]) * 100",
+                "legendFormat": "Error Rate %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Harbor Login Success Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_checks_total{check=\"login successful\"}[1m])",
+                "legendFormat": "Login Success Rate"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+          },
+          {
+            "id": 6,
+            "title": "Manifest Pull Success Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_checks_total{check=\"pull manifest success\"}[1m])",
+                "legendFormat": "Pull Success Rate"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+          }
+        ],
+        "time": {
+          "from": "now-30m",
+          "to": "now"
+        },
+        "refresh": "5s"
+      }
+    }
+    
+  k6-artifactory-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "K6 Artifactory Load Test",
+        "tags": ["k6", "artifactory", "load-testing"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Virtual Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_vus",
+                "legendFormat": "Active VUs"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Download Throughput",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_data_received_total[1m])",
+                "legendFormat": "Download Rate"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "Bps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Response Time Distribution",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.95\"}",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.50\"}",
+                "legendFormat": "50th percentile"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Download Success Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_checks_total{check=\"download success\"}[1m])",
+                "legendFormat": "Download Success"
+              },
+              {
+                "expr": "rate(k6_checks_total{check=\"content length\"}[1m])",
+                "legendFormat": "Content Validation"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          }
+        ],
+        "time": {
+          "from": "now-30m",
+          "to": "now"
+        },
+        "refresh": "5s"
+      }
+    }
+    
+  k6-vault-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "K6 Vault Load Test",
+        "tags": ["k6", "vault", "load-testing"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Virtual Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_vus",
+                "legendFormat": "Active VUs"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Secret Read Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(k6_http_reqs_total[1m])",
+                "legendFormat": "Reads/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Vault Response Time",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.95\"}",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.50\"}",
+                "legendFormat": "Median"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Secret Access Success",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_checks_total{check=\"secret read success\"}[1m])",
+                "legendFormat": "Read Success"
+              },
+              {
+                "expr": "rate(k6_checks_total{check=\"secret data exists\"}[1m])",
+                "legendFormat": "Data Validation"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          }
+        ],
+        "time": {
+          "from": "now-30m",
+          "to": "now"
+        },
+        "refresh": "5s"
+      }
+    }
+    
+  k6-keycloak-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "K6 Keycloak Load Test",
+        "tags": ["k6", "keycloak", "load-testing"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Authentication Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(k6_http_reqs_total[1m])",
+                "legendFormat": "Auth/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Active Virtual Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_vus",
+                "legendFormat": "Active VUs"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Authentication Response Time",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.95\"}",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.50\"}",
+                "legendFormat": "Median"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Authentication Success Metrics",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_checks_total{check=\"auth success\"}[1m])",
+                "legendFormat": "Auth Success"
+              },
+              {
+                "expr": "rate(k6_checks_total{check=\"access token received\"}[1m])",
+                "legendFormat": "Token Received"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+          },
+          {
+            "id": 5,
+            "title": "Error Rate",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "rate(k6_http_reqs_total{status!~\"2..\"}[1m]) / rate(k6_http_reqs_total[1m]) * 100",
+                "legendFormat": "Error Rate %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 5},
+                    {"color": "red", "value": 10}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+          }
+        ],
+        "time": {
+          "from": "now-30m",
+          "to": "now"
+        },
+        "refresh": "5s"
+      }
+    }
+    
+  k6-combined-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "K6 Combined Services Load Test",
+        "tags": ["k6", "combined", "load-testing"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Overall Virtual Users",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_vus",
+                "legendFormat": "Active VUs"
+              }
+            ],
+            "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Total Request Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(k6_http_reqs_total[1m]))",
+                "legendFormat": "Total Req/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Overall Error Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(rate(k6_http_reqs_total{status!~\"2..\"}[1m])) / sum(rate(k6_http_reqs_total[1m])) * 100",
+                "legendFormat": "Error Rate %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "thresholds": {
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 5},
+                    {"color": "red", "value": 10}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Data Transfer Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(k6_data_received_total[1m])",
+                "legendFormat": "Download Rate"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "Bps"
+              }
+            },
+            "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0}
+          },
+          {
+            "id": 5,
+            "title": "Response Times by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "k6_http_req_duration{type=\"harbor\", quantile=\"0.95\"}",
+                "legendFormat": "Harbor 95th"
+              },
+              {
+                "expr": "k6_http_req_duration{type=\"artifactory\", quantile=\"0.95\"}",
+                "legendFormat": "Artifactory 95th"
+              },
+              {
+                "expr": "k6_http_req_duration{type=\"vault\", quantile=\"0.95\"}",
+                "legendFormat": "Vault 95th"
+              },
+              {
+                "expr": "k6_http_req_duration{type=\"keycloak\", quantile=\"0.95\"}",
+                "legendFormat": "Keycloak 95th"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6}
+          },
+          {
+            "id": 6,
+            "title": "Request Rate by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_http_reqs_total{type=\"harbor\"}[1m])",
+                "legendFormat": "Harbor"
+              },
+              {
+                "expr": "rate(k6_http_reqs_total{type=\"artifactory\"}[1m])",
+                "legendFormat": "Artifactory"
+              },
+              {
+                "expr": "rate(k6_http_reqs_total{type=\"vault\"}[1m])",
+                "legendFormat": "Vault"
+              },
+              {
+                "expr": "rate(k6_http_reqs_total{type=\"keycloak\"}[1m])",
+                "legendFormat": "Keycloak"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+          },
+          {
+            "id": 7,
+            "title": "Success Rate by Service",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_checks_total{check=\"harbor pull success\"}[1m])",
+                "legendFormat": "Harbor Success"
+              },
+              {
+                "expr": "rate(k6_checks_total{check=\"artifactory download success\"}[1m])",
+                "legendFormat": "Artifactory Success"
+              },
+              {
+                "expr": "rate(k6_checks_total{check=\"vault secret read success\"}[1m])",
+                "legendFormat": "Vault Success"
+              },
+              {
+                "expr": "rate(k6_checks_total{check=\"keycloak auth success\"}[1m])",
+                "legendFormat": "Keycloak Success"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+          }
+        ],
+        "time": {
+          "from": "now-30m",
+          "to": "now"
+        },
+        "refresh": "5s"
+      }
+    }
+    
+  k6-overview-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "K6 Load Testing Overview",
+        "tags": ["k6", "overview", "load-testing"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Test Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_vus > 0",
+                "legendFormat": "Test Running"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {"options": {"0": {"text": "Stopped"}}, "type": "value"},
+                  {"options": {"1": {"text": "Running"}}, "type": "value"}
+                ]
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Total Iterations",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_iterations_total",
+                "legendFormat": "Iterations"
+              }
+            ],
+            "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Data Transferred",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "k6_data_received_total",
+                "legendFormat": "Total Data"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "bytes"
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Test Duration",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "time() - k6_test_start_timestamp",
+                "legendFormat": "Duration"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              }
+            },
+            "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+          },
+          {
+            "id": 5,
+            "title": "Virtual Users Over Time",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "k6_vus",
+                "legendFormat": "Virtual Users"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 24, "x": 0, "y": 4}
+          },
+          {
+            "id": 6,
+            "title": "HTTP Request Duration Percentiles",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.50\"}",
+                "legendFormat": "50th percentile"
+              },
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.90\"}",
+                "legendFormat": "90th percentile"
+              },
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.95\"}",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "k6_http_req_duration{quantile=\"0.99\"}",
+                "legendFormat": "99th percentile"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "ms"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+          },
+          {
+            "id": 7,
+            "title": "HTTP Status Codes",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(k6_http_reqs_total{status=\"200\"}[1m])",
+                "legendFormat": "200 OK"
+              },
+              {
+                "expr": "rate(k6_http_reqs_total{status!=\"200\"}[1m])",
+                "legendFormat": "Non-200"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "reqps"
+              }
+            },
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12}
+          }
+        ],
+        "time": {
+          "from": "now-30m",
+          "to": "now"
+        },
+        "refresh": "5s"
+      }
+    }
