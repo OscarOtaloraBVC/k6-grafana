@@ -18,485 +18,290 @@
   "links": [],
   "panels": [
     {
-      "title": "Total Requests",
+      "title": "Active Virtual Users",
       "type": "stat",
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 6,
         "x": 0,
         "y": 0
       },
       "targets": [
         {
-          "expr": "sum(total_requests)",
+          "expr": "k6_vus",
           "format": "time_series",
           "instant": true,
-          "interval": "",
-          "legendFormat": "Total Requests",
+          "legendFormat": "Active VUs",
           "refId": "A"
         }
       ],
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
+          "unit": "short"
+        }
       }
     },
     {
-      "title": "Checks Success Rate",
+      "title": "HTTP Request Rate",
       "type": "stat",
       "gridPos": {
-        "h": 4,
+        "h": 6,
         "w": 6,
         "x": 6,
         "y": 0
       },
       "targets": [
         {
-          "expr": "sum(checks_succeeded) / sum(checks_total) * 100",
+          "expr": "rate(k6_http_reqs_total[1m])",
           "format": "time_series",
           "instant": true,
-          "interval": "",
-          "legendFormat": "Success Rate",
+          "legendFormat": "Requests/sec",
           "refId": "A"
         }
       ],
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "mode": "palette-classic"
           },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 90
-              }
-            ]
-          },
-          "unit": "percent"
-        },
-        "overrides": []
+          "unit": "reqps"
+        }
       }
     },
     {
-      "title": "Virtual Users",
-      "type": "graph",
+      "title": "Success Rate",
+      "type": "stat",
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 6,
+        "w": 6,
         "x": 12,
         "y": 0
       },
       "targets": [
         {
-          "expr": "vus",
-          "interval": "",
-          "legendFormat": "Active VUs",
-          "refId": "A"
-        },
-        {
-          "expr": "vus_max",
-          "interval": "",
-          "legendFormat": "Max VUs",
-          "refId": "B"
-        }
-      ],
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      }
-    },
-    {
-      "title": "Authentication Metrics",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 8
-      },
-      "targets": [
-        {
-          "expr": "auth_duration{quantile=\"0.95\"}",
-          "interval": "",
-          "legendFormat": "Auth Duration p95",
-          "refId": "A"
-        },
-        {
-          "expr": "300",
-          "interval": "",
-          "legendFormat": "Threshold (300ms)",
-          "refId": "B"
-        },
-        {
-          "expr": "auth_success",
-          "interval": "",
-          "legendFormat": "Auth Success Rate",
-          "refId": "C"
-        }
-      ],
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Auth Success Rate"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "title": "HTTP Request Metrics",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
-      },
-      "targets": [
-        {
-          "expr": "http_req_duration{quantile=\"0.95\"}",
-          "interval": "",
-          "legendFormat": "HTTP Req Duration p95",
-          "refId": "A"
-        },
-        {
-          "expr": "500",
-          "interval": "",
-          "legendFormat": "Threshold (500ms)",
-          "refId": "B"
-        },
-        {
-          "expr": "http_req_failed",
-          "interval": "",
-          "legendFormat": "Failed Requests Rate",
-          "refId": "C"
-        }
-      ],
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Failed Requests Rate"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "title": "Manifest Pull Metrics",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 16
-      },
-      "targets": [
-        {
-          "expr": "manifest_pull_duration{quantile=\"0.95\"}",
-          "interval": "",
-          "legendFormat": "Manifest Pull Duration p95",
-          "refId": "A"
-        },
-        {
-          "expr": "400",
-          "interval": "",
-          "legendFormat": "Threshold (400ms)",
-          "refId": "B"
-        },
-        {
-          "expr": "manifest_pull_success",
-          "interval": "",
-          "legendFormat": "Manifest Pull Success Rate",
-          "refId": "C"
-        }
-      ],
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Manifest Pull Success Rate"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percentunit"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "title": "Iteration Duration",
-      "type": "graph",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 16
-      },
-      "targets": [
-        {
-          "expr": "iteration_duration{quantile=\"0.95\"}",
-          "interval": "",
-          "legendFormat": "p95",
-          "refId": "A"
-        },
-        {
-          "expr": "avg(iteration_duration)",
-          "interval": "",
-          "legendFormat": "avg",
-          "refId": "B"
-        }
-      ],
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ms"
-        },
-        "overrides": []
-      }
-    },
-    {
-      "title": "Checks Summary",
-      "type": "table",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 24
-      },
-      "targets": [
-        {
-          "expr": "sum(checks_total)",
-          "format": "table",
+          "expr": "rate(k6_checks{check=\"authentication successful\"}[1m]) * 100",
+          "format": "time_series",
           "instant": true,
-          "interval": "",
-          "legendFormat": "Total Checks",
+          "legendFormat": "Auth Success %",
           "refId": "A"
-        },
-        {
-          "expr": "sum(checks_succeeded)",
-          "format": "table",
-          "instant": true,
-          "interval": "",
-          "legendFormat": "Succeeded Checks",
-          "refId": "B"
-        },
-        {
-          "expr": "sum(checks_failed)",
-          "format": "table",
-          "instant": true,
-          "interval": "",
-          "legendFormat": "Failed Checks",
-          "refId": "C"
-        },
-        {
-          "expr": "sum(checks_succeeded) / sum(checks_total) * 100",
-          "format": "table",
-          "instant": true,
-          "interval": "",
-          "legendFormat": "Success Rate",
-          "refId": "D"
         }
       ],
-      "options": {
-        "showHeader": true,
-        "sortBy": []
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "thresholds"
           },
           "thresholds": {
-            "mode": "absolute",
             "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 50
-              },
-              {
-                "color": "green",
-                "value": 90
-              }
+              {"color": "red", "value": 0},
+              {"color": "yellow", "value": 80},
+              {"color": "green", "value": 95}
             ]
           },
           "unit": "percent"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Success Rate"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Total Checks"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "none"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Succeeded Checks"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "none"
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Failed Checks"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "none"
-              }
-            ]
-          }
-        ]
+        }
       }
+    },
+    {
+      "title": "Total Requests",
+      "type": "stat",
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "k6_total_requests",
+          "format": "time_series",
+          "instant": true,
+          "legendFormat": "Total",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "Authentication Duration",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "k6_auth_duration_ms",
+          "legendFormat": "p50 - {{quantile}}",
+          "refId": "A"
+        },
+        {
+          "expr": "k6_auth_duration_ms{quantile=\"0.95\"}",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "yAxes": [
+        {
+          "label": "Duration (ms)",
+          "unit": "ms"
+        }
+      ],
+      "thresholds": [
+        {
+          "value": 300,
+          "colorMode": "critical",
+          "op": "gt"
+        }
+      ]
+    },
+    {
+      "title": "Manifest Pull Duration",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "targets": [
+        {
+          "expr": "k6_manifest_pull_duration_ms",
+          "legendFormat": "p50 - {{quantile}}",
+          "refId": "A"
+        },
+        {
+          "expr": "k6_manifest_pull_duration_ms{quantile=\"0.95\"}",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "yAxes": [
+        {
+          "label": "Duration (ms)",
+          "unit": "ms"
+        }
+      ],
+      "thresholds": [
+        {
+          "value": 400,
+          "colorMode": "critical",
+          "op": "gt"
+        }
+      ]
+    },
+    {
+      "title": "HTTP Request Duration",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "k6_http_req_duration",
+          "legendFormat": "{{quantile}}",
+          "refId": "A"
+        }
+      ],
+      "yAxes": [
+        {
+          "label": "Duration (ms)",
+          "unit": "ms"
+        }
+      ]
+    },
+    {
+      "title": "Success Rates Over Time",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "targets": [
+        {
+          "expr": "rate(k6_auth_success[1m])",
+          "legendFormat": "Auth Success Rate",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(k6_manifest_pull_success[1m])",
+          "legendFormat": "Manifest Pull Success Rate",
+          "refId": "B"
+        }
+      ],
+      "yAxes": [
+        {
+          "label": "Success Rate",
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0
+        }
+      ]
+    },
+    {
+      "title": "Request Volume",
+      "type": "graph",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "expr": "rate(k6_http_reqs_total[1m])",
+          "legendFormat": "Total Requests/sec",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(k6_http_reqs_total{expected_response=\"true\"}[1m])",
+          "legendFormat": "Successful Requests/sec",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(k6_http_reqs_total{expected_response=\"false\"}[1m])",
+          "legendFormat": "Failed Requests/sec",
+          "refId": "C"
+        }
+      ],
+      "yAxes": [
+        {
+          "label": "Requests/sec",
+          "unit": "reqps"
+        }
+      ]
     }
   ],
   "refresh": "5s",
   "schemaVersion": 26,
   "style": "dark",
-  "tags": ["k6", "performance", "monitoring"],
+  "tags": ["k6", "harbor", "performance"],
   "templating": {
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
-  "title": "k6 Performance Dashboard",
-  "version": 1
+  "title": "k6 Harbor Performance Test Dashboard",
+  "version": 2
 }
