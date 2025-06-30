@@ -1,0 +1,233 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-harbor-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6", "run", "--out", "experimental-prometheus-rw=http://k6-prometheus-exporter:5656/api/v1/write", "/tests/harbor-test.js"]
+        env:
+        - name: HARBOR_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: harbor-url
+        - name: HARBOR_USER
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: harbor-user
+        - name: HARBOR_PASS
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: harbor-pass
+        volumeMounts:
+        - name: k6-tests
+          mountPath: /tests
+      restartPolicy: Never
+      volumes:
+      - name: k6-tests
+        configMap:
+          name: k6-tests
+          items:
+          - key: harbor-test.js
+            path: harbor-test.js
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-artifactory-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6", "run", "--out", "experimental-prometheus-rw=http://k6-prometheus-exporter:5656/api/v1/write", "/tests/artifactory-test.js"]
+        env:
+        - name: ARTIFACTORY_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: artifactory-url
+        - name: ARTIFACTORY_USER
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: artifactory-user
+        - name: ARTIFACTORY_PASS
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: artifactory-pass
+        volumeMounts:
+        - name: k6-tests
+          mountPath: /tests
+      restartPolicy: Never
+      volumes:
+      - name: k6-tests
+        configMap:
+          name: k6-tests
+          items:
+          - key: artifactory-test.js
+            path: artifactory-test.js
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-vault-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6", "run", "--out", "experimental-prometheus-rw=http://k6-prometheus-exporter:5656/api/v1/write", "/tests/vault-test.js"]
+        env:
+        - name: VAULT_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: vault-url
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: vault-token
+        volumeMounts:
+        - name: k6-tests
+          mountPath: /tests
+      restartPolicy: Never
+      volumes:
+      - name: k6-tests
+        configMap:
+          name: k6-tests
+          items:
+          - key: vault-test.js
+            path: vault-test.js
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-keycloak-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6", "run", "--out", "experimental-prometheus-rw=http://k6-prometheus-exporter:5656/api/v1/write", "/tests/keycloak-test.js"]
+        env:
+        - name: KEYCLOAK_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: keycloak-url
+        - name: KEYCLOAK_USER
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: keycloak-user
+        - name: KEYCLOAK_PASS
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: keycloak-pass
+        volumeMounts:
+        - name: k6-tests
+          mountPath: /tests
+      restartPolicy: Never
+      volumes:
+      - name: k6-tests
+        configMap:
+          name: k6-tests
+          items:
+          - key: keycloak-test.js
+            path: keycloak-test.js
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-combined-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6", "run", "--out", "experimental-prometheus-rw=http://k6-prometheus-exporter:5656/api/v1/write", "/tests/combined-test.js"]
+        env:
+        - name: HARBOR_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: harbor-url
+        - name: HARBOR_USER
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: harbor-user
+        - name: HARBOR_PASS
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: harbor-pass
+        - name: ARTIFACTORY_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: artifactory-url
+        - name: ARTIFACTORY_USER
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: artifactory-user
+        - name: ARTIFACTORY_PASS
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: artifactory-pass
+        - name: VAULT_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: vault-url
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: vault-token
+        - name: KEYCLOAK_URL
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: keycloak-url
+        - name: KEYCLOAK_USER
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: keycloak-user
+        - name: KEYCLOAK_PASS
+          valueFrom:
+            secretKeyRef:
+              name: k6-secrets
+              key: keycloak-pass
+        volumeMounts:
+        - name: k6-tests
+          mountPath: /tests
+      restartPolicy: Never
+      volumes:
+      - name: k6-tests
+        configMap:
+          name: k6-tests
+          items:
+          - key: combined-test.js
+            path: combined-test.js

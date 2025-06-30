@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k6-prometheus-exporter
+  labels:
+    app: k6-prometheus-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k6-prometheus-exporter
+  template:
+    metadata:
+      labels:
+        app: k6-prometheus-exporter
+    spec:
+      containers:
+      - name: exporter
+        image: grafana/k6-prometheus-exporter
+        ports:
+        - containerPort: 5656
+        env:
+        - name: K6_PROMETHEUS_RW_SERVER_URL
+          value: "http://prometheus-server.monitoring.svc.cluster.local:9090/api/v1/write"
+        - name: K6_PROMETHEUS_RW_TREND_STATS
+          value: "p(95),p(99),min,max,avg,med"
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k6-prometheus-exporter
+spec:
+  selector:
+    app: k6-prometheus-exporter
+  ports:
+    - protocol: TCP
+      port: 5656
+      targetPort: 5656
