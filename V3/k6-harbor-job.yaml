@@ -16,7 +16,7 @@ spec:
         command: ["k6"]
         args: [
           "run",
-          "--out", "prometheus=http://k6-output-service:6565",
+          "--out", "experimental-prometheus-rw=http://k6-output-service:6565",
           "/scripts/harbor-test.js"
         ]
         env:

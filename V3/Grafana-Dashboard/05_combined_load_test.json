@@ -1,0 +1,171 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "K6 Combined Services Load Test",
+    "tags": ["k6", "combined", "load-testing"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Overall Virtual Users",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "k6_vus",
+            "legendFormat": "Active VUs"
+          }
+        ],
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Total Request Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(k6_http_reqs_total[1m]))",
+            "legendFormat": "Total Req/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Overall Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(k6_http_reqs_total{status!~\"2..\"}[1m])) / sum(rate(k6_http_reqs_total[1m])) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Data Transfer Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(k6_data_received_total[1m])",
+            "legendFormat": "Download Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Bps"
+          }
+        },
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "id": 5,
+        "title": "Response Times by Service",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "k6_http_req_duration{type=\"harbor\", quantile=\"0.95\"}",
+            "legendFormat": "Harbor 95th"
+          },
+          {
+            "expr": "k6_http_req_duration{type=\"artifactory\", quantile=\"0.95\"}",
+            "legendFormat": "Artifactory 95th"
+          },
+          {
+            "expr": "k6_http_req_duration{type=\"vault\", quantile=\"0.95\"}",
+            "legendFormat": "Vault 95th"
+          },
+          {
+            "expr": "k6_http_req_duration{type=\"keycloak\", quantile=\"0.95\"}",
+            "legendFormat": "Keycloak 95th"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6}
+      },
+      {
+        "id": 6,
+        "title": "Request Rate by Service",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(k6_http_reqs_total{type=\"harbor\"}[1m])",
+            "legendFormat": "Harbor"
+          },
+          {
+            "expr": "rate(k6_http_reqs_total{type=\"artifactory\"}[1m])",
+            "legendFormat": "Artifactory"
+          },
+          {
+            "expr": "rate(k6_http_reqs_total{type=\"vault\"}[1m])",
+            "legendFormat": "Vault"
+          },
+          {
+            "expr": "rate(k6_http_reqs_total{type=\"keycloak\"}[1m])",
+            "legendFormat": "Keycloak"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14}
+      },
+      {
+        "id": 7,
+        "title": "Success Rate by Service",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(k6_checks_total{check=\"harbor pull success\"}[1m])",
+            "legendFormat": "Harbor Success"
+          },
+          {
+            "expr": "rate(k6_checks_total{check=\"artifactory download success\"}[1m])",
+            "legendFormat": "Artifactory Success"
+          },
+          {
+            "expr": "rate(k6_checks_total{check=\"vault secret read success\"}[1m])",
+            "legendFormat": "Vault Success"
+          },
+          {
+            "expr": "rate(k6_checks_total{check=\"keycloak auth success\"}[1m])",
+            "legendFormat": "Keycloak Success"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14}
+      }
+    ],
+    "time": {
+      "from": "now-30m",
+      "to": "now"
+    },
+    "refresh": "5s"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Escenario EC K8S DevOps 05 - Prueba masiva de consultas en aplicativos combinados",
+  "version": 1
+}

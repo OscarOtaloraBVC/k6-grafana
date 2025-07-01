@@ -1,0 +1,110 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "K6 Keycloak Load Test",
+    "tags": ["k6", "keycloak", "load-testing"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Authentication Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(k6_http_reqs_total[1m])",
+            "legendFormat": "Auth/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Active Virtual Users",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "k6_vus",
+            "legendFormat": "Active VUs"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Authentication Response Time",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "k6_http_req_duration{quantile=\"0.95\"}",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "k6_http_req_duration{quantile=\"0.50\"}",
+            "legendFormat": "Median"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Authentication Success Metrics",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(k6_checks_total{check=\"auth success\"}[1m])",
+            "legendFormat": "Auth Success"
+          },
+          {
+            "expr": "rate(k6_checks_total{check=\"access token received\"}[1m])",
+            "legendFormat": "Token Received"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Error Rate",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "rate(k6_http_reqs_total{status!~\"2..\"}[1m]) / rate(k6_http_reqs_total[1m]) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24}
+      }
+    ],
+    "time": {
+      "from": "now-30m",
+      "to": "now"
+    },
+    "refresh": "5s"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Escenario EC K8S DevOps 04 - Prueba masiva de autenticación en Keycloak",
+  "version": 1
+}
