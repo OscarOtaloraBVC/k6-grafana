@@ -1,4 +1,4 @@
-// Escenario EC K8S DevOps 01 - Prueba masiva de pull de imágenes en Harbor
+// Escenario EC K8S DevOps 01 - Prueba masiva de pull de imágenes en Harbor.
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
