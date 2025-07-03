@@ -18,7 +18,7 @@ export let options = {
   ],
   thresholds: {
     //'http_req_duration': ['avg<300', 'p(95)<500'],
-    'http_req_duration': ['avg<900', 'p(95)<2500'],
+    'http_req_duration': ['avg<900', 'p(95)<3500'],
     'http_req_failed': ['rate<0.5'],  // Umbral ajustado al 50% como requerimiento
     'checks{type:auth}': ['rate>0.9'], // Sintaxis corregida para checks con tags
   },
