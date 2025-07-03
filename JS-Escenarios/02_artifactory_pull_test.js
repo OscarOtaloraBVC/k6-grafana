@@ -22,12 +22,16 @@ export let options = {
 };
 
 // Variables de entorno
-const ARTIFACTORY_URL = __ENV.ARTIFACTORY_URL || 'https://artifactory.example.com';
+const ARTIFACTORY_URL = __ENV.ARTIFACTORY_URL || 'https://test-nuam-artifactory.coffeesoft.org/';
 const USERNAME = __ENV.ARTIFACTORY_USER || 'admin';
-const PASSWORD = __ENV.ARTIFACTORY_PASS || 'password';
-const REPO = __ENV.ARTIFACTORY_REPO || 'generic-local';
-const FILE_PATH = __ENV.ARTIFACTORY_FILE || 'test/testfile-30mb.bin';
-
+const PASSWORD = __ENV.ARTIFACTORY_PASS || 'Nuam123.*';
+const REPO = __ENV.ARTIFACTORY_REPO || 'k6-prueba';
+const FILE_PATHS = [
+  'test/testfile-15mb.bin',
+  'test/testfile-20mb.bin',
+  'test/testfile-25mb.bin',
+  'test/testfile-30mb.bin'
+];
 // Función principal
 export default function () {
   const url = `${ARTIFACTORY_URL}/${REPO}/${FILE_PATH}`;

@@ -37,9 +37,9 @@ export let options = {
 };
 
 // Variables de entorno con valores por defecto para testing
-const HARBOR_URL = __ENV.HARBOR_URL || 'https://demo.goharbor.io';
-const USERNAME = __ENV.HARBOR_USER || 'admin';
-const PASSWORD = __ENV.HARBOR_PASS || 'Harbor12345';
+const HARBOR_URL = __ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org/';
+const USERNAME = __ENV.HARBOR_USER || 'robot$k6testing';
+const PASSWORD = __ENV.HARBOR_PASS || 'xdPil4HhBmbvMPtFhpZHtOxNw9vDN0rG';
 const PROJECT = __ENV.HARBOR_PROJECT || 'library';
 const IMAGE = __ENV.HARBOR_IMAGE || 'hello-world';
 const TAG = __ENV.HARBOR_TAG || 'latest';
