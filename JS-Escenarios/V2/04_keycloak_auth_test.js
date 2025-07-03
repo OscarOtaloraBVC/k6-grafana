@@ -25,11 +25,11 @@ export let options = {
 };
 
 // Variables de entorno - Validación
-const KEYCLOAK_URL = __ENV.KEYCLOAK_URL || fail('KEYCLOAK_URL is required');
+const KEYCLOAK_URL = __ENV.KEYCLOAK_URL || fail('https://test-nuam-kc.coffeesoft.org');
 const REALM = __ENV.KEYCLOAK_REALM || 'master';
 const CLIENT_ID = __ENV.KEYCLOAK_CLIENT_ID || 'admin-cli';
-const USERNAME = __ENV.KEYCLOAK_USER || fail('KEYCLOAK_USER is required');
-const PASSWORD = __ENV.KEYCLOAK_PASS || fail('KEYCLOAK_PASS is required');
+const USERNAME = __ENV.KEYCLOAK_USER || fail('admin');
+const PASSWORD = __ENV.KEYCLOAK_PASS || fail('c659036218da417b9798c8ff97a0708d');
 
 // Función principal con reintentos
 export default function () {

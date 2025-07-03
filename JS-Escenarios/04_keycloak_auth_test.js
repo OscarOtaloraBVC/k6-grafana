@@ -22,11 +22,11 @@ export let options = {
 };
 
 // Variables de entorno
-const KEYCLOAK_URL = __ENV.KEYCLOAK_URL || 'https://keycloak.example.com';
+const KEYCLOAK_URL = __ENV.KEYCLOAK_URL || 'https://test-nuam-kc.coffeesoft.org';
 const REALM = __ENV.KEYCLOAK_REALM || 'master';
 const CLIENT_ID = __ENV.KEYCLOAK_CLIENT_ID || 'admin-cli';
 const USERNAME = __ENV.KEYCLOAK_USER || 'admin';
-const PASSWORD = __ENV.KEYCLOAK_PASS || 'password';
+const PASSWORD = __ENV.KEYCLOAK_PASS || 'c659036218da417b9798c8ff97a0708d';
 
 // Función principal
 export default function () {

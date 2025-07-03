@@ -27,9 +27,9 @@ export let options = {
 };
 
 // Variables de entorno
-const HARBOR_URL = __ENV.HARBOR_URL || 'https://harbor.example.com';
-const USERNAME = __ENV.HARBOR_USER || 'admin';
-const PASSWORD = __ENV.HARBOR_PASS || 'password';
+const HARBOR_URL = __ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org/';
+const USERNAME = __ENV.HARBOR_USER || 'robot$k6testing';
+const PASSWORD = __ENV.HARBOR_PASS || 'xdPil4HhBmbvMPtFhpZHtOxNw9vDN0rG';
 const PROJECT = __ENV.HARBOR_PROJECT || 'library';
 const IMAGE = __ENV.HARBOR_IMAGE || 'large-image'; // Imagen grande predefinida
 const TAG = __ENV.HARBOR_TAG || '100mb'; // Tag que indica el tamaño
