@@ -22,7 +22,7 @@ export let options = {
 };
 
 // Variables de entorno
-const ARTIFACTORY_URL = __ENV.ARTIFACTORY_URL || 'https://test-nuam-artifactory.coffeesoft.org/';
+const ARTIFACTORY_URL = __ENV.ARTIFACTORY_URL || 'https://test-nuam-artifactory.coffeesoft.org';
 const USERNAME = __ENV.ARTIFACTORY_USER || 'admin';
 const PASSWORD = __ENV.ARTIFACTORY_PASS || 'Nuam123.*';
 const REPO = __ENV.ARTIFACTORY_REPO || 'k6-prueba';
