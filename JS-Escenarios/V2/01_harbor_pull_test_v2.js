@@ -1,8 +1,7 @@
-// Escenario EC K8S DevOps 01 - Versión corregida
+// Escenario EC K8S DevOps 01 - Versión Final Corregida
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { btoa } from 'k6/encoding';
 
 // Configuración
 export let options = {
@@ -21,8 +20,8 @@ export let options = {
   thresholds: {
     http_req_duration: ['p(95)<500'],
     http_req_failed: [
-      { threshold: 'rate<0.1', abortOnFail: false }, // Temporalmente desactivado
-      { threshold: 'rate<0.5', abortOnFail: false }
+      { threshold: 'rate<0.1', abortOnFail: true },
+      { threshold: 'rate<0.5', abortOnFail: true, delayAbortEval: '10s' }
     ],
   },
 };
@@ -35,53 +34,94 @@ const PROJECT = __ENV.HARBOR_PROJECT || 'library';
 const IMAGE = __ENV.HARBOR_IMAGE || 'test-image';
 const TAG = __ENV.HARBOR_TAG || '30mb';
 
-// Generar headers de autenticación
-function getAuthHeaders() {
-  const encodedAuth = btoa(`${USERNAME}:${PASSWORD}`);
-  return {
-    headers: {
-      'Authorization': `Basic ${encodedAuth}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    timeout: '30s'
-  };
+// Función alternativa para codificación Base64 (reemplazo de btoa)
+function toBase64(str) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let output = '';
+  
+  for (let i = 0; i < str.length; i += 3) {
+    const a = str.charCodeAt(i);
+    const b = str.charCodeAt(i + 1);
+    const c = str.charCodeAt(i + 2);
+    
+    const enc1 = a >> 2;
+    const enc2 = ((a & 3) << 4) | (b >> 4);
+    const enc3 = isNaN(b) ? 64 : ((b & 15) << 2) | (c >> 6);
+    const enc4 = isNaN(c) ? 64 : c & 63;
+    
+    output += chars.charAt(enc1) + chars.charAt(enc2) + chars.charAt(enc3) + chars.charAt(enc4);
+  }
+  
+  return output;
 }
 
-// Función principal mejorada
-export default function () {
-  // 1. Obtener manifiesto
-  const manifestUrl = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/manifests/${TAG}`;
-  const manifestParams = {
-    ...getAuthHeaders(),
-    headers: {
-      ...getAuthHeaders().headers,
-      'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
-    },
-    timeout: '60s'
-  };
-
-  let manifestRes;
+// Generar headers de autenticación con manejo robusto
+function getAuthHeaders() {
   try {
+    if (!USERNAME || !PASSWORD) {
+      throw new Error('Credenciales no definidas');
+    }
+    
+    const authString = `${USERNAME}:${PASSWORD}`;
+    const encodedAuth = toBase64(authString);
+    
+    return {
+      headers: {
+        'Authorization': `Basic ${encodedAuth}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      timeout: '30s'
+    };
+  } catch (e) {
+    console.error(`Error generando headers: ${e.message}`);
+    return {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      timeout: '30s'
+    };
+  }
+}
+
+// Función principal con manejo completo de errores
+export default function () {
+  let manifestRes;
+  
+  try {
+    // 1. Obtener manifiesto
+    const manifestUrl = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/manifests/${TAG}`;
+    const manifestParams = {
+      ...getAuthHeaders(),
+      headers: {
+        ...getAuthHeaders().headers,
+        'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
+      },
+      timeout: '60s'
+    };
+
     manifestRes = http.get(manifestUrl, manifestParams);
     
-    if (!manifestRes || !manifestRes.json) {
-      throw new Error('Respuesta del manifiesto inválida');
+    if (!manifestRes) {
+      throw new Error('No se recibió respuesta del servidor');
     }
 
     const manifestCheck = check(manifestRes, {
       'pull manifest success': (r) => r.status === 200,
       'manifest valid': (r) => {
         try {
-          return r.json().schemaVersion === 2;
+          const json = r.json();
+          return json && json.schemaVersion === 2;
         } catch (e) {
+          console.error(`Error parseando manifiesto: ${e.message}`);
           return false;
         }
       }
     });
 
     if (!manifestCheck) {
-      throw new Error('Falló la validación del manifiesto');
+      throw new Error(`Falló la validación del manifiesto. Código: ${manifestRes.status}`);
     }
 
     // 2. Descargar capas
@@ -114,15 +154,14 @@ export default function () {
   } catch (e) {
     console.error(`Error en iteración: ${e.message}`);
     if (manifestRes) {
-      console.error(`Detalles respuesta: ${manifestRes.body}`);
+      console.error(`Detalles respuesta: ${manifestRes.status} - ${manifestRes.body}`);
     }
-    return;
   }
   
   sleep(1);
 }
 
-// Función de resumen
+// Función de resumen mejorada
 export function handleSummary(data) {
   const metrics = {
     avg_response_time: data.metrics.http_req_duration.values.avg,
@@ -130,10 +169,12 @@ export function handleSummary(data) {
     request_rate: data.metrics.http_reqs.values.rate,
     failure_rate: data.metrics.http_req_failed.values.rate,
     total_iterations: data.metrics.iterations.values.count,
-    status_codes: data.metrics.http_reqs.values.statuses
+    status_codes: data.metrics.http_reqs.values.statuses,
+    error_messages: data.metrics.errors.values
   };
   
   return {
-    stdout: JSON.stringify(metrics, null, 2)
+    stdout: JSON.stringify(metrics, null, 2),
+    'summary.json': JSON.stringify(metrics)
   };
 }
