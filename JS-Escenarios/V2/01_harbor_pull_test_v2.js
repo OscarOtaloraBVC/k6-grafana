@@ -1,4 +1,4 @@
-// Escenario EC K8S DevOps 01 - Prueba masiva de pull de imágenes en Harbor (Versión ajustada)
+// Escenario EC K8S DevOps 01 - Versión corregida
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -7,22 +7,22 @@ import { btoa } from 'k6/encoding';
 // Configuración
 export let options = {
   stages: [
-    { duration: '1m', target: 50 },  // Rampa a 50 peticiones/segundo
-    { duration: '2m', target: 50 },  // Mantener 50 peticiones/segundo
-    { duration: '1m', target: 25 },  // Reducir a 25 peticiones/segundo
-    { duration: '2m', target: 25 },  // Mantener 25 peticiones/segundo
-    { duration: '1m', target: 15 },  // Reducir a 15 peticiones/segundo
-    { duration: '2m', target: 15 },  // Mantener 15 peticiones/segundo
-    { duration: '1m', target: 10 },  // Reducir a 10 peticiones/segundo
-    { duration: '2m', target: 10 },  // Mantener 10 peticiones/segundo
-    { duration: '1m', target: 0 },   // Enfriamiento
+    { duration: '1m', target: 50 },
+    { duration: '2m', target: 50 },
+    { duration: '1m', target: 25 },
+    { duration: '2m', target: 25 },
+    { duration: '1m', target: 15 },
+    { duration: '2m', target: 15 },
+    { duration: '1m', target: 10 },
+    { duration: '2m', target: 10 },
+    { duration: '1m', target: 0 },
   ],
   noConnectionReuse: true,
   thresholds: {
-    http_req_duration: ['p(95)<500'], // 95% de las peticiones deben responder en menos de 500ms
+    http_req_duration: ['p(95)<500'],
     http_req_failed: [
-      { threshold: 'rate<0.1', abortOnFail: true }, // Umbral de alerta
-      { threshold: 'rate<0.5', abortOnFail: true, delayAbortEval: '10s' } // Detener prueba si >50% de fallos
+      { threshold: 'rate<0.1', abortOnFail: false }, // Temporalmente desactivado
+      { threshold: 'rate<0.5', abortOnFail: false }
     ],
   },
 };
@@ -32,50 +32,63 @@ const HARBOR_URL = (__ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.o
 const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
 const PROJECT = __ENV.HARBOR_PROJECT || 'library';
-const IMAGE = __ENV.HARBOR_IMAGE || 'test-image'; // Usando la imagen de prueba
-const TAG = __ENV.HARBOR_TAG || '30mb'; // Tag que indica el tamaño
+const IMAGE = __ENV.HARBOR_IMAGE || 'test-image';
+const TAG = __ENV.HARBOR_TAG || '30mb';
 
-// Generar headers de autenticación básica
+// Generar headers de autenticación
 function getAuthHeaders() {
-  const authString = `${USERNAME}:${PASSWORD}`;
-  const encodedAuth = btoa(authString);
-  
+  const encodedAuth = btoa(`${USERNAME}:${PASSWORD}`);
   return {
     headers: {
       'Authorization': `Basic ${encodedAuth}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
     },
     timeout: '30s'
   };
 }
 
-// Función principal
+// Función principal mejorada
 export default function () {
+  // 1. Obtener manifiesto
+  const manifestUrl = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/manifests/${TAG}`;
+  const manifestParams = {
+    ...getAuthHeaders(),
+    headers: {
+      ...getAuthHeaders().headers,
+      'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
+    },
+    timeout: '60s'
+  };
+
+  let manifestRes;
   try {
-    // 1. Obtener manifiesto de la imagen
-    const manifestUrl = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/manifests/${TAG}`;
-    const manifestParams = {
-      ...getAuthHeaders(),
-      headers: {
-        ...getAuthHeaders().headers,
-        'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
-      },
-      timeout: '60s'
-    };
+    manifestRes = http.get(manifestUrl, manifestParams);
     
-    const manifestRes = http.get(manifestUrl, manifestParams);
-    
-    check(manifestRes, {
+    if (!manifestRes || !manifestRes.json) {
+      throw new Error('Respuesta del manifiesto inválida');
+    }
+
+    const manifestCheck = check(manifestRes, {
       'pull manifest success': (r) => r.status === 200,
-      'manifest valid': (r) => r.json().schemaVersion === 2
+      'manifest valid': (r) => {
+        try {
+          return r.json().schemaVersion === 2;
+        } catch (e) {
+          return false;
+        }
+      }
     });
-    
-    // 2. Descargar capas de la imagen (simulando pull completo)
+
+    if (!manifestCheck) {
+      throw new Error('Falló la validación del manifiesto');
+    }
+
+    // 2. Descargar capas
     if (manifestRes.status === 200) {
       const manifest = manifestRes.json();
       const layers = manifest.layers || [];
       
-      // Descargar la primera capa (asumiendo que es la principal)
       if (layers.length > 0) {
         const layerUrl = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/blobs/${layers[0].digest}`;
         const layerParams = {
@@ -84,7 +97,7 @@ export default function () {
             ...getAuthHeaders().headers,
             'Accept': 'application/octet-stream'
           },
-          timeout: '120s' // Tiempo mayor para descarga de capas grandes
+          timeout: '120s'
         };
         
         const layerRes = http.get(layerUrl, layerParams);
@@ -98,28 +111,29 @@ export default function () {
         });
       }
     }
-    
-    sleep(1);
   } catch (e) {
-    console.error('Error en iteración:', e.message);
+    console.error(`Error en iteración: ${e.message}`);
+    if (manifestRes) {
+      console.error(`Detalles respuesta: ${manifestRes.body}`);
+    }
+    return;
   }
+  
+  sleep(1);
 }
 
-// Función de manejo de métricas
+// Función de resumen
 export function handleSummary(data) {
   const metrics = {
-    cpu_usage: "N/A",
-    memory_usage: "N/A",
     avg_response_time: data.metrics.http_req_duration.values.avg,
     p95_response_time: data.metrics.http_req_duration.values['p(95)'],
     request_rate: data.metrics.http_reqs.values.rate,
     failure_rate: data.metrics.http_req_failed.values.rate,
-    total_iterations: data.metrics.iterations.values.count
+    total_iterations: data.metrics.iterations.values.count,
+    status_codes: data.metrics.http_reqs.values.statuses
   };
   
-  console.log(JSON.stringify(metrics, null, 2));
-  
   return {
-    'stdout': `Resumen de prueba: ${JSON.stringify(metrics, null, 2)}`
+    stdout: JSON.stringify(metrics, null, 2)
   };
 }
