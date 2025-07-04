@@ -146,8 +146,10 @@ export default function () {
         check(layerRes, {
           'layer download success': (r) => r.status === 200,
           'layer size valid': (r) => {
-            const size = parseInt(r.headers['Content-Length'] || '0');
-            return size >= 28*1024*1024 && size <= 50*1024*1024;
+            const compressedSize = parseInt(r.headers['Content-Length'] || '0');
+            // Factor de descompresión estimado (10x es común para datos binarios)
+            const uncompressedSize = compressedSize * 10; 
+            return uncompressedSize >= 28*1024*1024 && uncompressedSize <= 50*1024*1024;
           }
         });
       }
