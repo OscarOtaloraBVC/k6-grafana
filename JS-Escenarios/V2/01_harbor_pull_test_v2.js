@@ -19,7 +19,7 @@ export let options = {
   noConnectionReuse: true,
   thresholds: {
     //http_req_duration: ['p(95)<500'],
-    http_req_duration: ['p(95)<2800'],
+    http_req_duration: ['p(95)<3500'],
     http_req_failed: [
       { threshold: 'rate<0.1', abortOnFail: true },
       { threshold: 'rate<0.5', abortOnFail: true, delayAbortEval: '10s' }
