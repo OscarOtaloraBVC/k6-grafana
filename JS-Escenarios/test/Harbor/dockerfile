@@ -1,7 +1,20 @@
-# Dockerfile para imagen con tamaño configurable
+# Define el argumento de construcción para el tamaño del archivo dummy
 ARG SIZE=30
+
+# Usa la imagen base Alpine Linux
 FROM alpine:3.14
 
-RUN dd if=/dev/zero of=/dummy-file bs=1M count=${SIZE}
+# Asigna el valor del argumento de construcción SIZE a una variable de entorno DUMMY_FILE_SIZE.
+# Esto asegura que el valor se expanda correctamente en el comando RUN.
+ENV DUMMY_FILE_SIZE=${SIZE}
 
-CMD ["sh", "-c", "echo 'Imagen de prueba de ${SIZE}MB'; sleep infinity"]
+# Crea un archivo dummy del tamaño especificado usando dd.
+# dd if=/dev/zero: Lee desde /dev/zero (fuente de ceros).
+# of=/dummy-file: Escribe en el archivo /dummy-file.
+# bs=1M: Establece el tamaño de bloque a 1 Megabyte.
+# count=${DUMMY_FILE_SIZE}: El número de bloques a copiar, que es el tamaño en MB.
+RUN dd if=/dev/zero of=/dummy-file bs=1M count=${DUMMY_FILE_SIZE}
+
+# Comando que se ejecutará cuando el contenedor inicie.
+# Muestra un mensaje y mantiene el contenedor en ejecución indefinidamente.
+CMD ["sh", "-c", "echo 'Imagen de prueba de ${DUMMY_FILE_SIZE}MB'; sleep infinity"]
