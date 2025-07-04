@@ -19,7 +19,7 @@ export let options = {
   noConnectionReuse: true,
   thresholds: {
     //http_req_duration: ['p(95)<500'],
-    http_req_duration: ['p(95)<4500'],
+    http_req_duration: ['p(95)<3500'],
     http_req_failed: [
       { threshold: 'rate<0.1', abortOnFail: true },
       { threshold: 'rate<0.5', abortOnFail: true, delayAbortEval: '10s' }
@@ -35,7 +35,7 @@ const PROJECT = __ENV.HARBOR_PROJECT || 'library';
 const IMAGE = __ENV.HARBOR_IMAGE || 'test-image';
 const TAG = __ENV.HARBOR_TAG || '30mb';
 
-// Función alternativa para codificación Base64 (reemplazo de btoa)
+// Función alternativa para codificación Base64 
 function toBase64(str) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
   let output = '';
@@ -56,7 +56,7 @@ function toBase64(str) {
   return output;
 }
 
-// Generar headers de autenticación con manejo robusto
+// Generar headers de autenticación 
 function getAuthHeaders() {
   try {
     if (!USERNAME || !PASSWORD) {
@@ -86,7 +86,7 @@ function getAuthHeaders() {
   }
 }
 
-// Función principal con manejo completo de errores
+// Función principal 
 export default function () {
   let manifestRes;
   
@@ -164,7 +164,7 @@ export default function () {
   sleep(1);
 }
 
-// Función de resumen mejorada
+// Función de resumen 
 export function handleSummary(data) {
   // Objeto seguro para métricas
   const safeMetrics = {
