@@ -30,9 +30,9 @@ export let options = {
 const HARBOR_URL = __ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org/';
 const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
-const PROJECT = __ENV.HARBOR_PROJECT || 'library';
-const IMAGE = __ENV.HARBOR_IMAGE || 'large-image'; // Imagen grande predefinida
-const TAG = __ENV.HARBOR_TAG || '100mb'; // Tag que indica el tamaño
+const PROJECT = __ENV.HARBOR_PROJECT || 'library'; // Proyecto de prueba
+const IMAGE = __ENV.HARBOR_IMAGE || 'test-image'; // Imagen grande predefinida
+const TAG = __ENV.HARBOR_TAG || '30mb'; // Tag que indica el tamaño
 
 // Autenticación en Harbor
 function getAuthToken() {
