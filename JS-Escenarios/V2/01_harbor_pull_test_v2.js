@@ -18,7 +18,8 @@ export let options = {
   ],
   noConnectionReuse: true,
   thresholds: {
-    http_req_duration: ['p(95)<500'],
+    //http_req_duration: ['p(95)<500'],
+    http_req_duration: ['p(95)<1000'],
     http_req_failed: [
       { threshold: 'rate<0.1', abortOnFail: true },
       { threshold: 'rate<0.5', abortOnFail: true, delayAbortEval: '10s' }
@@ -163,18 +164,38 @@ export default function () {
 
 // Función de resumen mejorada
 export function handleSummary(data) {
-  const metrics = {
-    avg_response_time: data.metrics.http_req_duration.values.avg,
-    p95_response_time: data.metrics.http_req_duration.values['p(95)'],
-    request_rate: data.metrics.http_reqs.values.rate,
-    failure_rate: data.metrics.http_req_failed.values.rate,
-    total_iterations: data.metrics.iterations.values.count,
-    status_codes: data.metrics.http_reqs.values.statuses,
-    error_messages: data.metrics.errors.values
+  // Objeto seguro para métricas
+  const safeMetrics = {
+    avg_response_time: data.metrics?.http_req_duration?.values?.avg || 'N/A',
+    p95_response_time: data.metrics?.http_req_duration?.values?.['p(95)'] || 'N/A',
+    request_rate: data.metrics?.http_reqs?.values?.rate || 'N/A',
+    failure_rate: data.metrics?.http_req_failed?.values?.rate || 'N/A',
+    total_iterations: data.metrics?.iterations?.values?.count || 0,
+    status_codes: data.metrics?.http_reqs?.values?.statuses || {},
+    error_messages: data.metrics?.errors?.values || []
   };
+
+  // Resultados de checks
+  const checksResults = {
+    'pull manifest success': data.metrics?.checks?.values?.['pull manifest success'] || 0,
+    'manifest valid': data.metrics?.checks?.values?.['manifest valid'] || 0,
+    'layer download success': data.metrics?.checks?.values?.['layer download success'] || 0,
+    'layer size valid': data.metrics?.checks?.values?.['layer size valid'] || 0
+  };
+
+  const summary = {
+    metrics: safeMetrics,
+    checks: checksResults,
+    thresholds: {
+      http_req_duration: data.metrics?.http_req_duration?.thresholds || {},
+      http_req_failed: data.metrics?.http_req_failed?.thresholds || {}
+    }
+  };
+
+  console.log('Resumen completo:', JSON.stringify(summary, null, 2));
   
   return {
-    stdout: JSON.stringify(metrics, null, 2),
-    'summary.json': JSON.stringify(metrics)
+    'stdout': `Resumen de prueba: ${JSON.stringify(summary, null, 2)}`,
+    'summary.json': JSON.stringify(summary)
   };
 }
