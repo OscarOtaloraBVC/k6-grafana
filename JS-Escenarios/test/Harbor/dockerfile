@@ -1,14 +1,7 @@
-# Image: k6-grafana/JS-Escenarios/V2/01_harbor_pull_test.js para prueba de pull masivo en Harbor
-# Dockerfile para imagen de prueba de 30MB aprox.
+# Dockerfile para imagen con tamaño configurable
+ARG SIZE=30
 FROM alpine:3.14
 
-# Crear archivo de 30MB lleno de ceros
-RUN dd if=/dev/zero of=/30mb-file bs=1M count=30
+RUN dd if=/dev/zero of=/dummy-file bs=1M count=${SIZE}
 
-# Metadatos adicionales
-LABEL description="Imagen de prueba para pull masivo en Harbor" \
-      size="30MB" \
-      purpose="performance-testing"
-
-# Comando simple para mantener el contenedor activo
-CMD ["sh", "-c", "echo 'Imagen de prueba para Harbor'; sleep infinity"]
+CMD ["sh", "-c", "echo 'Imagen de prueba de ${SIZE}MB'; sleep infinity"]
