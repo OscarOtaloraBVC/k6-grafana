@@ -27,7 +27,7 @@ export let options = {
 };
 
 // Variables de entorno
-const HARBOR_URL = __ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org/';
+const HARBOR_URL = __ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org';
 const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
 const PROJECT = __ENV.HARBOR_PROJECT || 'library'; // Proyecto de prueba
