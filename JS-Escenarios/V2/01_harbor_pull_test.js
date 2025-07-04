@@ -6,7 +6,7 @@ import { check, sleep } from 'k6';
 // Configuración
 export let options = {
   stages: [
-    { duration: '1m', target: 50 },  // Rampa a 50 peticiones/segundo
+    { duration: '1m', target: 50 },  // Reducir a 50 peticiones/segundo
     { duration: '2m', target: 50 },  // Mantener 50 peticiones/segundo
     { duration: '1m', target: 25 },  // Reducir a 25 peticiones/segundo
     { duration: '2m', target: 25 },  // Mantener 25 peticiones/segundo
