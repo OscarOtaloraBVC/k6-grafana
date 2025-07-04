@@ -1,3 +1,4 @@
+# Image: k6-grafana/JS-Escenarios/V2/01_harbor_pull_test.js para prueba de pull masivo en Harbor
 # Dockerfile para imagen de prueba de 30MB aprox.
 FROM alpine:3.14
 
