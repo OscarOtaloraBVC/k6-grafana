@@ -14,7 +14,7 @@ const artifactoryErrorRate = new Rate('artifactory_error_rate');
 const vaultErrorRate = new Rate('vault_error_rate');
 const keycloakErrorRate = new Rate('keycloak_error_rate');
 
-// Configuración de escenarios (igual que en la versión anterior)
+// Configuración de escenarios
 export let options = {
   scenarios: {
     // Escenario 1 (Primeros 3 minutos)
@@ -208,8 +208,8 @@ function getRandomElement(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-// Función para Harbor - Pull de imágenes
-function harborPull() {
+// Exportación de funciones de prueba
+export function harborPull() {
   const manifestUrl = `${HARBOR_URL}/v2/${HARBOR_PROJECT}/${HARBOR_IMAGE}/manifests/${HARBOR_TAG}`;
   
   const params = {
@@ -238,8 +238,7 @@ function harborPull() {
   }
 }
 
-// Función para Artifactory - Descarga de artefactos
-function artifactoryPull() {
+export function artifactoryPull() {
   const filePath = getRandomElement(ARTIFACTORY_FILE_PATHS);
   const url = `${ARTIFACTORY_URL}/${ARTIFACTORY_REPO}/${filePath}`;
   
@@ -269,8 +268,7 @@ function artifactoryPull() {
   }
 }
 
-// Función para Vault - Consulta de secretos
-function vaultSecret() {
+export function vaultSecret() {
   const secretPath = getRandomElement(VAULT_SECRET_PATHS);
   const url = `${VAULT_URL}${secretPath}`;
   
@@ -299,8 +297,7 @@ function vaultSecret() {
   }
 }
 
-// Función para Keycloak - Autenticación
-function keycloakAuth() {
+export function keycloakAuth() {
   const url = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token`;
   
   const payload = `client_id=${KEYCLOAK_CLIENT_ID}&username=${KEYCLOAK_USER}&password=${KEYCLOAK_PASS}&grant_type=password`;
