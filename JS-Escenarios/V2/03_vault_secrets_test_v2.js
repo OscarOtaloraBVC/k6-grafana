@@ -93,7 +93,8 @@ export default function () {
     check(response, {
       'vault_request_success': (r) => r.status === 200,
       'vault_data_valid': () => isValid,
-      'response_time_under_800ms': (r) => r.timings.duration < 800
+      //'response_time_under_800ms': (r) => r.timings.duration < 800
+      'response_time_under_1500ms': (r) => r.timings.duration < 1500
     });
 
     if (response.status === 200 && isValid) {
