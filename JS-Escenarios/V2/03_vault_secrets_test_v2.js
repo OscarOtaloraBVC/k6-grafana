@@ -46,9 +46,7 @@ export let options = {
 const VAULT_URL = __ENV.VAULT_URL || 'http://localhost:8200';
 const TOKEN = __ENV.VAULT_TOKEN || 'hvs.wy9yDkSXpszNTDWfNxNMswQo';
 const SECRET_PATHS = [
-  __ENV.VAULT_SECRET_PATH || '/v1/kv_Production/data/data/testingk6',
-  '/v1/kv_Production/data/data/app1',
-  '/v1/kv_Production/data/data/app2'
+  __ENV.VAULT_SECRET_PATH || '/v1/kv_Production/data/data/testingk6'
 ];
 
 // ======================
