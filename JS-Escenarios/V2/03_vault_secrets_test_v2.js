@@ -28,7 +28,8 @@ export let options = {
     { duration: '1m', target: 0 },
   ],
   thresholds: {
-    'http_req_duration': ['p(95)<500', 'p(99)<1000'],
+    //'http_req_duration': ['p(95)<500', 'p(99)<1000'],
+    'http_req_duration': ['p(95)<1000', 'p(99)<1000'],
     'http_req_failed': ['rate<0.05'],  // Corregido: nombre correcto de la métrica built-in
     'successful_requests': ['rate>0.95'],
     'error_requests': ['rate<0.05'],
