@@ -1,4 +1,4 @@
-// Escenario EC K8S DevOps 03 - Prueba masiva de consulta de secretos en Vault (Valores predefinidos)
+// Escenario EC K8S DevOps 03 - Prueba masiva de consulta de secretos en Vault
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
