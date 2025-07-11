@@ -1,4 +1,4 @@
-// Escenario EC K8S DevOps 03 - Prueba masiva de consulta de secretos en Vault (Versión final)
+// Escenario EC K8S DevOps 03 - Prueba masiva de consulta de secretos en Vault (Versión final corregida)
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
@@ -17,23 +17,23 @@ const errorCounter = new Counter('vault_errors');
 // ======================
 export let options = {
   stages: [
-    { duration: '1m', target: 100 },  // Rampa a 100 peticiones/segundo
-    { duration: '2m', target: 100 },  // Mantener 100 peticiones/segundo
-    { duration: '1m', target: 50 },   // Reducir a 50 peticiones/segundo
-    { duration: '2m', target: 50 },   // Mantener 50 peticiones/segundo
-    { duration: '1m', target: 25 },   // Reducir a 25 peticiones/segundo
-    { duration: '2m', target: 25 },   // Mantener 25 peticiones/segundo
-    { duration: '1m', target: 15 },   // Reducir a 15 peticiones/segundo
-    { duration: '2m', target: 15 },   // Mantener 15 peticiones/segundo
-    { duration: '1m', target: 0 },    // Enfriamiento
+    { duration: '1m', target: 100 },
+    { duration: '2m', target: 100 },
+    { duration: '1m', target: 50 },
+    { duration: '2m', target: 50 },
+    { duration: '1m', target: 25 },
+    { duration: '2m', target: 25 },
+    { duration: '1m', target: 15 },
+    { duration: '2m', target: 15 },
+    { duration: '1m', target: 0 },
   ],
   thresholds: {
     'http_req_duration': ['p(95)<500', 'p(99)<1000'],
-    'http_req_failed': ['rate<0.05'],
+    'http_req_failed': ['rate<0.05'],  // Corregido: nombre correcto de la métrica built-in
     'successful_requests': ['rate>0.95'],
     'error_requests': ['rate<0.05'],
-    'checks': ['rate>0.95'],          // Umbral global para todas las checks
-    'vault_errors': ['count<100']     // Corregido: usando el nombre correcto de la métrica
+    'checks': ['rate>0.95'],
+    'vault_errors': ['count<100']
   },
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   noConnectionReuse: true
@@ -85,25 +85,17 @@ export default function () {
   };
 
   group('Vault Secret Retrieval', () => {
-    // Verificar tasa de error antes de continuar
-    if (__ITER > 0 && http_req.failed > 0.5) {
-      errorCounter.add(1);
-      return;
-    }
-
     const response = http.get(url, params);
     responseTrend.add(response.timings.duration);
     
     const isValid = validateVaultResponse(response);
     
-    // Checks con nombres consistentes
     check(response, {
       'vault_request_success': (r) => r.status === 200,
       'vault_data_valid': () => isValid,
       'response_time_under_800ms': (r) => r.timings.duration < 800
     });
 
-    // Actualizar métricas
     if (response.status === 200 && isValid) {
       successRate.add(1);
     } else {
@@ -121,20 +113,6 @@ export default function () {
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data, { indent: ' ', enableColors: true }),
-    './summary.json': JSON.stringify(data),
-    './summary.html': generateHtmlReport(data)
+    './summary.json': JSON.stringify(data)
   };
-}
-
-// Función opcional para generar reporte HTML
-function generateHtmlReport(data) {
-  return `
-    <html>
-      <head><title>Vault Load Test Report</title></head>
-      <body>
-        <h1>Vault Performance Test Results</h1>
-        <pre>${JSON.stringify(data, null, 2)}</pre>
-      </body>
-    </html>
-  `;
 }
