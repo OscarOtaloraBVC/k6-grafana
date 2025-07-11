@@ -28,7 +28,7 @@ export let options = {
     { duration: '1m', target: 0 },
   ],
   thresholds: {
-    //'http_req_duration': ['p(95)<500', 'p(99)<1000'],
+    //'http_req_duration': ['p(95)<500', 'p(99)<1000'], Propuesta original
     'http_req_duration': ['p(95)<1000', 'p(99)<1000'],
     'http_req_failed': ['rate<0.05'],  // Corregido: nombre correcto de la métrica built-in
     'successful_requests': ['rate>0.95'],
@@ -94,7 +94,7 @@ export default function () {
     check(response, {
       'vault_request_success': (r) => r.status === 200,
       'vault_data_valid': () => isValid,
-      //'response_time_under_800ms': (r) => r.timings.duration < 800
+      //'response_time_under_800ms': (r) => r.timings.duration < 800 Propuesta original
       'response_time_under_3500ms': (r) => r.timings.duration < 3500
     });
 
