@@ -1,4 +1,6 @@
 // Escenario EC K8S DevOps 03 - Prueba masiva de consulta de secretos en Vault (Versión final corregida)
+// Ejecucion k6 run 03_vault_secrets_test.js   -e VAULT_TOKEN=el_token   -e VAULT_URL=http://localhost:8200
+
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
