@@ -1,7 +1,8 @@
-// Escenario EC K8S DevOps 03 - Prueba masiva de consulta de secretos en Vault (Versión mejorada)
+// Escenario EC K8S DevOps 03 - Prueba masiva de consulta de secretos en Vault (Versión corregida)
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 
 // ======================
 // Métricas personalizadas
@@ -16,28 +17,26 @@ const errorCounter = new Counter('total_errors');
 // ======================
 export let options = {
   stages: [
-    { duration: '1m', target: 100 },  // Rampa a 100 peticiones/segundo
-    { duration: '2m', target: 100 },  // Mantener 100 peticiones/segundo
-    { duration: '1m', target: 50 },   // Reducir a 50 peticiones/segundo
-    { duration: '2m', target: 50 },   // Mantener 50 peticiones/segundo
-    { duration: '1m', target: 25 },   // Reducir a 25 peticiones/segundo
-    { duration: '2m', target: 25 },   // Mantener 25 peticiones/segundo
-    { duration: '1m', target: 15 },   // Reducir a 15 peticiones/segundo
-    { duration: '2m', target: 15 },   // Mantener 15 peticiones/segundo
-    { duration: '1m', target: 0 },    // Enfriamiento
+    { duration: '1m', target: 100 },
+    { duration: '2m', target: 100 },
+    { duration: '1m', target: 50 },
+    { duration: '2m', target: 50 },
+    { duration: '1m', target: 25 },
+    { duration: '2m', target: 25 },
+    { duration: '1m', target: 15 },
+    { duration: '2m', target: 15 },
+    { duration: '1m', target: 0 },
   ],
   thresholds: {
     'http_req_duration': ['p(95)<500', 'p(99)<1000'],
-    'http_req_failed': ['rate<0.05'],    // Tasa de error menor al 5%
-    'successful_requests': ['rate>0.95'], // 95% de éxito
-    'error_requests': ['rate<0.05'],      // Menos del 5% de errores
-    'checks{secret_read_success}': ['rate>0.95'],
-    'checks{secret_data_valid}': ['rate>0.95'],
-    'checks{response_time_acceptable}': ['rate>0.90'],
-    'total_errors': ['count<100']
+    'http_req_failed': ['rate<0.05'],
+    'successful_requests': ['rate>0.95'],
+    'error_requests': ['rate<0.05'],
+    'checks': ['rate>0.95'], // Umbral global para todas las checks
+    'errors': ['count<100']
   },
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
-  noConnectionReuse: true // Para evitar reutilización de conexiones que pueda afectar métricas
+  noConnectionReuse: true
 };
 
 // ======================
@@ -46,7 +45,9 @@ export let options = {
 const VAULT_URL = __ENV.VAULT_URL || 'http://localhost:8200';
 const TOKEN = __ENV.VAULT_TOKEN || 'hvs.wy9yDkSXpszNTDWfNxNMswQo';
 const SECRET_PATHS = [
-  __ENV.VAULT_SECRET_PATH || '/v1/kv_Production/data/data/testingk6'
+  __ENV.VAULT_SECRET_PATH || '/v1/kv_Production/data/data/testingk6',
+  '/v1/kv_Production/data/data/app1',
+  '/v1/kv_Production/data/data/app2'
 ];
 
 // ======================
@@ -55,36 +56,14 @@ const SECRET_PATHS = [
 function validateSecretResponse(response) {
   try {
     if (!response) return false;
+    if (response.status !== 200) return false;
     
-    // Validar estructura básica de la respuesta
-    if (response.status !== 200) {
-      console.error(`Código de estado inválido: ${response.status}`);
-      return false;
-    }
-
-    // Validar estructura JSON
     const jsonData = response.json();
-    if (!jsonData) {
-      console.error('Respuesta no es JSON válido');
-      return false;
-    }
-
-    // Validar estructura específica de Vault
-    if (!jsonData.data || !jsonData.data.data) {
-      console.error('Estructura de datos de Vault inválida');
-      return false;
-    }
-
-    // Validar contenido mínimo del secreto
+    if (!jsonData || !jsonData.data || !jsonData.data.data) return false;
+    
     const secretData = jsonData.data.data;
-    if (typeof secretData !== 'object' || Object.keys(secretData).length === 0) {
-      console.error('Secreto no contiene datos');
-      return false;
-    }
-
-    return true;
+    return typeof secretData === 'object' && Object.keys(secretData).length > 0;
   } catch (error) {
-    console.error(`Error validando respuesta: ${error.message}`);
     return false;
   }
 }
@@ -106,49 +85,38 @@ export default function () {
       secret_path: secretPath,
       test_type: 'secret_retrieval'
     },
-    timeout: '30s' // Timeout aumentado para entornos con alta latencia
+    timeout: '30s'
   };
 
-  // Ejecutar la petición dentro de un grupo para mejor organización en los reportes
   group('Vault Secret Retrieval', function () {
-    // Verificar tasa de error y abortar si es >50%
     if (__ITER > 0 && __VU * 0.5 < http_req.failed) {
-      console.log(`Abortando: Tasa de fallo excede 50% (${http_req.failed})`);
       errorCounter.add(1);
       return;
     }
 
     response = http.get(url, params);
-    
-    // Registrar métricas
     responseTrend.add(response.timings.duration);
     
-    // Validar respuesta
     const isResponseValid = validateSecretResponse(response);
     
-    // Registrar checks
-    const checkResults = check(response, {
+    // Checks con nombres válidos (sin espacios ni caracteres especiales)
+    check(response, {
       'secret_read_success': (r) => r.status === 200,
       'secret_data_valid': () => isResponseValid,
-      'response_time_acceptable': (r) => r.timings.duration < 800
+      'acceptable_response_time': (r) => r.timings.duration < 800
     });
 
-    // Actualizar métricas de éxito/error
-    if (checkResults && isResponseValid) {
+    if (response.status === 200 && isResponseValid) {
       successRate.add(1);
     } else {
       errorRate.add(1);
       errorCounter.add(1);
-      console.error(`Error en petición a ${url}: ${response.status} - ${response.body}`);
     }
   });
 
   sleep(1);
 }
 
-// ======================
-// Función de manejo de resumen (opcional)
-// ======================
 export function handleSummary(data) {
   return {
     'stdout': textSummary(data, { indent: ' ', enableColors: true }),
