@@ -29,7 +29,7 @@ export let options = {
   thresholds: {
     //'http_req_duration': ['p(95)<500', 'p(99)<1000'], Propuesta original
     'http_req_duration': ['p(95)<1000', 'p(99)<1000'],
-    'http_req_failed': ['rate<0.05'],  // Corregido: nombre correcto de la métrica built-in
+    'http_req_failed': ['rate<0.05'],
     'successful_requests': ['rate>0.95'],
     'error_requests': ['rate<0.05'],
     'checks': ['rate>0.95'],

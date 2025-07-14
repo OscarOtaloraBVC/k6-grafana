@@ -60,7 +60,7 @@ export default function () {
     timeout: '30s',
     tags: { 
       name: 'keycloak_auth',
-      type: 'auth'  // Tag usado para agrupar checks
+      type: 'auth'
     },
   };
   
@@ -81,7 +81,6 @@ export default function () {
       sleep(1);
     }
     
-    // Check con tags 
     check(res, {
       'auth status is 200': (r) => r.status === 200,
       'access token received': (r) => r.json().access_token !== undefined,
