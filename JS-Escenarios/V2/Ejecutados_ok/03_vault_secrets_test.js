@@ -6,16 +6,13 @@ import { check, sleep, group } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 
-// ======================
-// Métricas personalizadas
-// ======================
 const responseTrend = new Trend('response_time');
 const successRate = new Rate('successful_requests');
 const errorRate = new Rate('error_requests');
 const errorCounter = new Counter('vault_errors');
 
 // ======================
-// Configuración principal
+// Configuración tiempo de ejecución
 // ======================
 export let options = {
   stages: [
