@@ -17,15 +17,15 @@ import { check, sleep } from 'k6';
 // Configuración
 export let options = {
   stages: [
-    { duration: '1m', target: 50 },
-    { duration: '2m', target: 50 },
-    { duration: '1m', target: 25 },
-    { duration: '2m', target: 25 },
-    { duration: '1m', target: 15 },
-    { duration: '2m', target: 15 },
-    { duration: '1m', target: 10 },
-    { duration: '2m', target: 10 },
-    { duration: '1m', target: 0 },
+    { duration: '1s', target: 50 },
+    //{ duration: '2m', target: 50 },
+    { duration: '1s', target: 25 },
+    //{ duration: '2m', target: 25 },
+    { duration: '1s', target: 15 },
+    //{ duration: '2m', target: 15 },
+    { duration: '1s', target: 10 },
+    //{ duration: '2m', target: 10 },
+    //{ duration: '1m', target: 0 },
   ],
   noConnectionReuse: true,
   thresholds: {
@@ -42,9 +42,9 @@ export let options = {
 const HARBOR_URL = (__ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org').replace(/\/$/, '');
 const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
-const PROJECT = __ENV.HARBOR_PROJECT || 'library';
-const IMAGE = __ENV.HARBOR_IMAGE || 'test-image';
-const TAG = __ENV.HARBOR_TAG || '30mb';
+const PROJECT = __ENV.HARBOR_PROJECT || 'test-devops';
+const IMAGE = __ENV.HARBOR_IMAGE || 'ubuntu';
+const TAG = __ENV.HARBOR_TAG || 'xk6-1749486052417';
 
 // Función de codificación Base64 
 function toBase64(str) {
