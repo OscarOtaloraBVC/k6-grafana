@@ -1,4 +1,5 @@
-// Escenario EC K8S DevOps 01 - Versión Final Corregida
+// Escenario EC K8S DevOps 01 
+// ejecucion k6 run 01_harbor_pull_test.js
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -35,7 +36,7 @@ const PROJECT = __ENV.HARBOR_PROJECT || 'library';
 const IMAGE = __ENV.HARBOR_IMAGE || 'test-image';
 const TAG = __ENV.HARBOR_TAG || '30mb';
 
-// Función alternativa para codificación Base64 
+// Función de codificación Base64 
 function toBase64(str) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
   let output = '';

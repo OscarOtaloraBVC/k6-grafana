@@ -1,4 +1,6 @@
 //Escenario EC K8S DevOps 02 - Prueba masiva de pull de binarios en Artifactory
+// Ejecucion k6 run 02_artifactory_pull_test.js
+
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 

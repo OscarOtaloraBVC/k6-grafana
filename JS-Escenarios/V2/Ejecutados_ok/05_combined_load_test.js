@@ -4,7 +4,9 @@
 // Utiliza un enfoque de tasa constante para controlar la carga en cada servicio.
 // https://nuamexchange.atlassian.net/wiki/x/IYD2Mw 
 // EC K8S DevOps 05 - Prueba masiva de consultas en aplicactivos (Harbor, Artifactory, Vault y Keycloak)
-//======================
+// Ejecucion k6 run 05_combined_load_test.js
+// ======================
+
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
