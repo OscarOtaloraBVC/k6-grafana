@@ -1,4 +1,10 @@
 // EC K8S DevOps 05 - Prueba masiva de consultas en aplicativos (Harbor, Artifactory, Vault y Keycloak)
+// Este escenario combina las pruebas de Harbor, Artifactory, Vault y Keycloak
+// con diferentes tasas de llegada para simular alta, media y baja carga.
+// Utiliza un enfoque de tasa constante para controlar la carga en cada servicio.
+// https://nuamexchange.atlassian.net/wiki/x/IYD2Mw 
+// EC K8S DevOps 05 - Prueba masiva de consultas en aplicactivos (Harbor, Artifactory, Vault y Keycloak)
+//======================
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
@@ -17,8 +23,9 @@ const errorRate = new Rate('error_requests');
 const errorCounter = new Counter('total_errors');
 
 // ======================
-// Configuración principal
+// Escenario carga combinada
 // ======================
+
 export let options = {
   scenarios: {
     // Escenario 1 - Alta carga
