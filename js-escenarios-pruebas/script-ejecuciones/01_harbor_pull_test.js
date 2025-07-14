@@ -1,4 +1,14 @@
 // Escenario EC K8S DevOps 01 
+// Construccion de imágenes en Harbor 
+//  # Construir la imagen
+//      docker build -t test-image:30mb .
+//  # Taggear para Harbor
+//      docker tag test-image:30mb test-nuam-registry.coffeesoft.org/library/test-image:30mb
+//  # Login a Harbor (Para carga de imagenes)
+//      docker login test-nuam-registry.coffeesoft.org -u admin -p r7Y5mQBwsM2lIj0
+//  # Push a Harbor
+//      docker push test-nuam-registry.coffeesoft.org/library/test-image:30mb
+//
 // ejecucion k6 run 01_harbor_pull_test.js
 
 import http from 'k6/http';
@@ -167,7 +177,6 @@ export default function () {
 
 // Función de resumen 
 export function handleSummary(data) {
-  // Objeto seguro para métricas
   const safeMetrics = {
     avg_response_time: data.metrics?.http_req_duration?.values?.avg || 'N/A',
     p95_response_time: data.metrics?.http_req_duration?.values?.['p(95)'] || 'N/A',
