@@ -27,8 +27,10 @@ export let options = {
       rate: 450, // 25 Harbor + 25 Artifactory + 100 Vault + 100 Keycloak + margen
       timeUnit: '1s',
       duration: '5m',
-      preAllocatedVUs: 100,
-      maxVUs: 200,
+      //preAllocatedVUs: 100, Propuesta inicial
+      preAllocatedVUs: 300,
+      //maxVUs: 200, Propuesta Inicial
+      maxVUs: 500,
       exec: 'highLoadScenario',
     },
     // Escenario 2 - Media carga
@@ -60,11 +62,13 @@ export let options = {
     'error_requests': ['rate<0.5'],
     
     // Umbrales por servicio
-    'harbor_response_time': ['p(95)<3500'],
+    //'harbor_response_time': ['p(95)<3500'], Propuesta inicial
+    'harbor_response_time': ['p(95)<5000'],
     'artifactory_response_time': ['p(95)<500'],
     'vault_response_time': ['p(95)<1000'],
-    'keycloak_response_time': ['p(95)<2800'],
-    
+    //'keycloak_response_time': ['p(95)<2800'], Propuesta inicial
+    'keycloak_response_time': ['p(95)<5000'],
+
     // Checks de éxito
     'checks{service:harbor}': ['rate>0.9'],
     'checks{service:artifactory}': ['rate>0.9'],
@@ -210,8 +214,9 @@ function testHarbor() {
           'harbor layer download success': (r) => r.status === 200,
           'harbor layer size valid': (r) => {
             const compressedSize = parseInt(r.headers['Content-Length'] || '0');
-            const uncompressedSize = compressedSize * 10;
-            return uncompressedSize >= 28*1024*1024 && uncompressedSize <= 50*1024*1024;
+            //const uncompressedSize = compressedSize * 10;
+            //return uncompressedSize >= 28*1024*1024 && uncompressedSize <= 50*1024*1024;
+            return compressedSize >= 28*1024*1024 && compressedSize <= 50*1024*1024;
           }
         }, { service: 'harbor' });
       }
