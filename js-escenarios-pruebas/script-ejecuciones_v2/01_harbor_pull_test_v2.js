@@ -28,65 +28,85 @@ export let options = {
   },
 };
 
-// Variables de entorno
-const PROMETHEUS_URL = 'localhost:9090';
-const HARBOR_URL = 'https://test-nuam-registry.coffeesoft.org';
+// Variables de entorno - IMPORTANTE: Usar http://
+const PROMETHEUS_URL = 'http://localhost:9090'; // Añadir protocolo http://
+const HARBOR_URL = 'test-nuam-registry.coffeesoft.org'; // Sin https:// para comandos Docker
 const IMAGE_NAME = 'test-devops/ubuntu:xk6-1749486052417';
 
-// Consultas Prometheus
-const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry",container=~"core|registry"}[1m])) by (container) * 100';
-const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry",container=~"core|registry"}) by (container) / (1024*1024)';
+// Consultas Prometheus ajustadas
+const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{container=~"harbor-core|harbor-registry"}[1m])) by (container) * 100';
+const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{container=~"harbor-core|harbor-registry"}) by (container) / (1024*1024)';
 
-// Obtener métricas de Prometheus 
+// Función mejorada para obtener métricas
 function getHarborMetrics() {
+  let metrics = {
+    cpu: { core: 0, registry: 0 },
+    memory: { core: 0, registry: 0 }
+  };
+
   try {
     // Consultar CPU
     const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`, {
-      timeout: '5s',
+      timeout: '10s',
       tags: { metric_type: 'cpu_query' }
     });
-    
+
+    if (cpuRes && cpuRes.status === 200) {
+      const cpuData = cpuRes.json();
+      if (cpuData && cpuData.data && cpuData.data.result) {
+        cpuData.data.result.forEach(item => {
+          const value = parseFloat(item.value?.[1]) || 0;
+          if (item.metric?.container.includes('core')) metrics.cpu.core = value;
+          if (item.metric?.container.includes('registry')) metrics.cpu.registry = value;
+        });
+      }
+    }
+
     // Consultar Memoria
     const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`, {
-      timeout: '5s',
+      timeout: '10s',
       tags: { metric_type: 'memory_query' }
     });
 
-    // Procesar resultados
-    const metrics = {
-      cpu: { core: 0, registry: 0 },
-      memory: { core: 0, registry: 0 }
-    };
-
-    if (cpuRes.status === 200) {
-      const data = cpuRes.json();
-      if (data.data && data.data.result) {
-        data.data.result.forEach(item => {
-          if (item.metric.container === 'core') metrics.cpu.core = parseFloat(item.value[1]) || 0;
-          if (item.metric.container === 'registry') metrics.cpu.registry = parseFloat(item.value[1]) || 0;
+    if (memRes && memRes.status === 200) {
+      const memData = memRes.json();
+      if (memData && memData.data && memData.data.result) {
+        memData.data.result.forEach(item => {
+          const value = parseFloat(item.value?.[1]) || 0;
+          if (item.metric?.container.includes('core')) metrics.memory.core = value;
+          if (item.metric?.container.includes('registry')) metrics.memory.registry = value;
         });
       }
     }
 
-    if (memRes.status === 200) {
-      const data = memRes.json();
-      if (data.data && data.data.result) {
-        data.data.result.forEach(item => {
-          if (item.metric.container === 'core') metrics.memory.core = parseFloat(item.value[1]) || 0;
-          if (item.metric.container === 'registry') metrics.memory.registry = parseFloat(item.value[1]) || 0;
-        });
-      }
-    }
-
-    return metrics;
   } catch (e) {
     errorCount.add(1);
     console.error(`Error fetching metrics: ${e.message}`);
-    return {
-      cpu: { core: 0, registry: 0 },
-      memory: { core: 0, registry: 0 }
-    };
   }
+
+  return metrics;
+}
+
+// Función segura para ejecutar comandos Docker
+function runDockerCommand(cmd, operation) {
+  const start = Date.now();
+  let success = false;
+  let output = '';
+
+  try {
+    const result = exec(cmd, { timeout: '30s' });
+    success = result.exit_status === 0;
+    output = result.stdout || result.stderr || '';
+  } catch (e) {
+    errorCount.add(1);
+    console.error(`${operation} error: ${e.message}`);
+    output = e.message;
+  }
+
+  const duration = (Date.now() - start) / 1000;
+  operationDuration.add(duration, { operation });
+
+  return { success, duration, output };
 }
 
 // Función principal de prueba
@@ -99,36 +119,29 @@ export default function () {
   memoryUsage.add(metrics.memory.registry, { component: 'registry' });
 
   // 2. Operación Docker Pull
-  const pullStart = Date.now();
-  let pullSuccess = false;
-  try {
-    const pullResult = exec(`docker pull ${HARBOR_URL}/${IMAGE_NAME}`, { timeout: '30s' });
-    pullSuccess = pullResult.exit_status === 0;
-  } catch (e) {
-    errorCount.add(1);
-    console.error(`Docker pull failed: ${e.message}`);
-  }
-  const pullDuration = (Date.now() - pullStart) / 1000;
-  operationDuration.add(pullDuration, { operation: 'pull' });
+  const { success: pullSuccess, duration: pullDuration } = runDockerCommand(
+    `docker pull ${HARBOR_URL}/${IMAGE_NAME}`,
+    'pull'
+  );
 
-  // 3. Operación Docker RM
-  const rmStart = Date.now();
+  // 3. Operación Docker RM (solo si pull fue exitoso)
   let rmSuccess = false;
-  try {
-    const rmResult = exec(`docker rmi ${HARBOR_URL}/${IMAGE_NAME}`, { timeout: '30s' });
-    rmSuccess = rmResult.exit_status === 0;
-  } catch (e) {
-    errorCount.add(1);
-    console.error(`Docker rm failed: ${e.message}`);
+  let rmDuration = 0;
+  
+  if (pullSuccess) {
+    const rmResult = runDockerCommand(
+      `docker rmi ${HARBOR_URL}/${IMAGE_NAME}`,
+      'rm'
+    );
+    rmSuccess = rmResult.success;
+    rmDuration = rmResult.duration;
   }
-  const rmDuration = (Date.now() - rmStart) / 1000;
-  operationDuration.add(rmDuration, { operation: 'rm' });
 
   // 4. Registrar resultados
   requestRate.add(1);
   check({
-    pullSuccess: pullSuccess,
-    rmSuccess: rmSuccess,
+    pullSuccess,
+    rmSuccess: pullSuccess ? rmSuccess : true, // No fallar si no se intentó rm
     cpuUsage: metrics.cpu.core,
   }, {
     'docker pull succeeded': (r) => r.pullSuccess,
@@ -139,29 +152,35 @@ export default function () {
   sleep(1);
 }
 
-// Función de resumen compatible con Prometheus
+// Función de resumen mejorada
 export function handleSummary(data) {
-  const metrics = [
-    // Métricas de rendimiento
-    `# HELP k6_docker_operations_total Total docker operations`,
-    `# TYPE k6_docker_operations_total counter`,
-    `k6_docker_operations_total{operation="pull"} ${data.metrics['checks'].passes || 0}`,
-    `k6_docker_operations_total{operation="rm"} ${data.metrics['checks'].passes || 0}`,
+  const safeGet = (obj, path, def = 0) => {
+    try {
+      return path.split('.').reduce((o, p) => o[p], obj) || def;
+    } catch {
+      return def;
+    }
+  };
 
-    // Métricas de duración
-    `# HELP k6_operation_duration_seconds Duration of operations`,
-    `# TYPE k6_operation_duration_seconds summary`,
-    `k6_operation_duration_seconds{operation="pull",quantile="0.95"} ${data.metrics['docker_operation_duration_seconds'].values['p(95)'] || 0}`,
-    `k6_operation_duration_seconds{operation="rm",quantile="0.95"} ${data.metrics['docker_operation_duration_seconds'].values['p(95)'] || 0}`,
-
-    // Métricas de error
-    `# HELP k6_errors_total Total errors during test`,
-    `# TYPE k6_errors_total counter`,
-    `k6_errors_total ${data.metrics['error_count'].values.count || 0}`,
-  ].join('\n');
+  const summary = {
+    timestamp: new Date().toISOString(),
+    metrics: {
+      cpu_usage: {
+        core: safeGet(data.metrics, 'harbor_cpu_usage_percent.values.avg'),
+        registry: safeGet(data.metrics, 'harbor_cpu_usage_percent.values.avg')
+      },
+      operations: {
+        pull: {
+          count: safeGet(data.metrics, 'checks.passes'),
+          duration_p95: safeGet(data.metrics, 'docker_operation_duration_seconds.values.p(95)')
+        }
+      },
+      errors: safeGet(data.metrics, 'error_count.values.count')
+    }
+  };
 
   return {
-    'stdout': `Resumen de prueba:\n${JSON.stringify(data, null, 2)}`,
-    'prometheus-metrics.txt': metrics
+    stdout: JSON.stringify(summary, null, 2),
+    'summary.json': JSON.stringify(summary, null, 2)
   };
 }
