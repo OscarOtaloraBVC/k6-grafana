@@ -47,8 +47,14 @@ const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry
 
 // Función para validar URLs
 function validateUrl(url) {
+  if (!url) return false;
+  
   try {
-    new URL(url);
+    const tempUrl = url.startsWith('http://') || url.startsWith('https://') 
+      ? url 
+      : `https://${url}`;
+    
+    new URL(tempUrl);
     return true;
   } catch (e) {
     return false;
@@ -163,12 +169,15 @@ function simulateDockerOperation(operation, url, auth) {
     
     switch (operation) {
       case 'login':
-        const loginUrl = `https://${url}/api/v2.0/users/current`;
-        console.debug(`Login URL: ${loginUrl}`);
+        // Construir URL asegurando que tenga el protocolo
+        const baseUrl = url.startsWith('http') ? url : `https://${url}`;
+        const loginUrl = `${baseUrl}/api/v2.0/users/current`;
         
         if (!validateUrl(loginUrl)) {
-          throw new Error(`URL de login inválida: ${loginUrl}`);
+          throw new Error(`URL de login inválida: ${loginUrl}. Verifique el formato.`);
         }
+        
+        console.debug(`Login URL: ${loginUrl}`);
         
         response = http.get(loginUrl, {
           headers: {
@@ -185,12 +194,14 @@ function simulateDockerOperation(operation, url, auth) {
       case 'pull':
         const imageInfo = parseImageName(IMAGE_NAME);
         const { project, repo, tag } = imageInfo;
-        const pullUrl = `https://${url}/api/v2.0/projects/${project}/repositories/${repo}/artifacts/${tag}`;
-        console.debug(`Pull URL: ${pullUrl}`);
+        const baseUrlPull = url.startsWith('http') ? url : `https://${url}`;
+        const pullUrl = `${baseUrlPull}/api/v2.0/projects/${project}/repositories/${repo}/artifacts/${tag}`;
         
         if (!validateUrl(pullUrl)) {
           throw new Error(`URL de pull inválida: ${pullUrl}`);
         }
+        
+        console.debug(`Pull URL: ${pullUrl}`);
         
         response = http.get(pullUrl, {
           headers: {
