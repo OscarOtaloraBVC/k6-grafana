@@ -2,6 +2,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Trend, Rate, Counter, Gauge } from 'k6/metrics';
+import encoding from 'k6/encoding';
 
 // Métricas mejoradas
 const harborCPU = new Gauge('harbor_cpu_usage');
@@ -35,6 +36,11 @@ const IMAGE_NAME = __ENV.IMAGE_NAME || 'test-devops/ubuntu:xk6-1749486052417';
 const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
 
+// Función para crear Basic Auth header
+function createBasicAuthHeader(username, password) {
+  return `Basic ${encoding.b64encode(username + ':' + password)}`;
+}
+
 // Consultas Prometheus específicas
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
@@ -47,13 +53,14 @@ function simulateDockerOperation(operation, url, auth) {
 
   try {
     let response;
+    const authHeader = createBasicAuthHeader(USERNAME, PASSWORD);
     
     switch (operation) {
       case 'login':
         // Verificar autenticación con Harbor API
         response = http.get(`https://${url}/api/v2.0/users/current`, {
           headers: {
-            'Authorization': `Basic ${__ENV.HARBOR_AUTH || btoa(USERNAME + ':' + PASSWORD)}`,
+            'Authorization': authHeader,
             'Content-Type': 'application/json'
           },
           timeout: '30s'
@@ -66,7 +73,7 @@ function simulateDockerOperation(operation, url, auth) {
         // Simular pull verificando que la imagen existe
         response = http.get(`https://${url}/api/v2.0/projects/${IMAGE_NAME.split('/')[0]}/repositories/${IMAGE_NAME.split('/')[1].split(':')[0]}/artifacts/${IMAGE_NAME.split(':')[1] || 'latest'}`, {
           headers: {
-            'Authorization': `Basic ${__ENV.HARBOR_AUTH || btoa(USERNAME + ':' + PASSWORD)}`,
+            'Authorization': authHeader,
             'Content-Type': 'application/json'
           },
           timeout: '30s'
