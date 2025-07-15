@@ -35,8 +35,8 @@ const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
 
 // Consultas Prometheus
-const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{container=~"harbor-core|harbor-registry"}[1m])) by (container) * 100';
-const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{container=~"harbor-core|harbor-registry"}) by (container) / (1024*1024)';
+const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
+const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
 // Función para obtener métricas
 function getHarborMetrics() {
