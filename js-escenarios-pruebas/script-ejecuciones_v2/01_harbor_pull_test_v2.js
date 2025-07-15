@@ -29,13 +29,13 @@ export let options = {
 };
 
 // Variables de entorno
-const PROMETHEUS_URL = 'http://prometheus-kube-prometheus-prometheus.monitoring:9090';
+const PROMETHEUS_URL = 'localhost:9090';
 const HARBOR_URL = 'https://test-nuam-registry.coffeesoft.org';
 const IMAGE_NAME = 'test-devops/ubuntu:xk6-1749486052417';
 
 // Consultas Prometheus
-const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="harbor",container=~"core|registry"}[1m])) by (container) * 100';
-const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="harbor",container=~"core|registry"}) by (container) / (1024*1024)';
+const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry",container=~"core|registry"}[1m])) by (container) * 100';
+const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry",container=~"core|registry"}) by (container) / (1024*1024)';
 
 // Obtener métricas de Prometheus 
 function getHarborMetrics() {
