@@ -45,35 +45,111 @@ function createBasicAuthHeader(username, password) {
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Función mejorada para parsear el nombre de imagen
-function parseImageName(imageName) {
+// Función para validar URLs
+function validateUrl(url) {
   try {
-    // Formato esperado: proyecto/repo:tag
-    const parts = imageName.split(':');
-    let tag = 'latest';
-    let projectRepo = imageName;
-    
-    if (parts.length > 1) {
-      tag = parts[1];
-      projectRepo = parts[0];
-    }
-    
-    const repoParts = projectRepo.split('/');
-    if (repoParts.length < 2) {
-      throw new Error('Formato de imagen inválido. Esperado: proyecto/repo:tag');
-    }
-    
-    const project = repoParts[0];
-    const repo = repoParts.slice(1).join('/');
-    
-    return { project, repo, tag };
+    new URL(url);
+    return true;
   } catch (e) {
-    console.error(`Error parsing image name "${imageName}": ${e.message}`);
-    return null;
+    return false;
   }
 }
 
-// Función para simular operaciones Docker mediante Harbor API
+// Función mejorada para parsear el nombre de imagen
+function parseImageName(imageName) {
+  if (!imageName || typeof imageName !== 'string') {
+    throw new Error('El nombre de la imagen debe ser una cadena no vacía');
+  }
+  
+  const parts = imageName.split(':');
+  let tag = 'latest';
+  let projectRepo = imageName;
+  
+  if (parts.length > 1) {
+    tag = parts[1];
+    projectRepo = parts[0];
+  }
+  
+  const repoParts = projectRepo.split('/');
+  if (repoParts.length < 2) {
+    throw new Error('Formato de imagen inválido. Esperado: proyecto/repo:tag');
+  }
+  
+  const project = repoParts[0];
+  const repo = repoParts.slice(1).join('/');
+  
+  return { project, repo, tag };
+}
+
+// Función para obtener métricas de Harbor mejorada
+function getHarborMetrics() {
+  const metrics = {
+    cpu: { core: 0, registry: 0 },
+    memory: { core: 0, registry: 0 }
+  };
+
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') {
+    console.debug('Prometheus URL no configurada, saltando métricas...');
+    return metrics;
+  }
+
+  try {
+    // Consultar CPU
+    const cpuUrl = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`;
+    if (!validateUrl(cpuUrl)) {
+      console.warn(`URL de CPU inválida: ${cpuUrl}`);
+      return metrics;
+    }
+
+    const cpuRes = http.get(cpuUrl, { timeout: '10s' });
+
+    if (cpuRes.status === 200) {
+      const data = cpuRes.json();
+      if (data?.data?.result) {
+        data.data.result.forEach(item => {
+          const container = item?.metric?.container;
+          const value = parseFloat(item?.value?.[1]) || 0;
+          if (container === 'core' || container === 'registry') {
+            metrics.cpu[container] = value;
+          }
+        });
+      }
+    } else {
+      console.warn(`Error en consulta CPU: ${cpuRes.status}`);
+    }
+
+    // Consultar Memoria
+    const memUrl = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`;
+    if (!validateUrl(memUrl)) {
+      console.warn(`URL de memoria inválida: ${memUrl}`);
+      return metrics;
+    }
+
+    const memRes = http.get(memUrl, { timeout: '10s' });
+
+    if (memRes.status === 200) {
+      const data = memRes.json();
+      if (data?.data?.result) {
+        data.data.result.forEach(item => {
+          const container = item?.metric?.container;
+          const value = parseFloat(item?.value?.[1]) || 0;
+          if (container === 'core' || container === 'registry') {
+            metrics.memory[container] = value;
+          }
+        });
+      }
+    } else {
+      console.warn(`Error en consulta Memoria: ${memRes.status}`);
+    }
+
+  } catch (e) {
+    console.warn(`Error obteniendo métricas de Prometheus: ${e.message}`);
+  }
+
+  return metrics;
+}
+
+// Función mejorada para simular operaciones Docker mediante Harbor API
 function simulateDockerOperation(operation, url, auth) {
   const start = Date.now();
   let success = false;
@@ -83,13 +159,16 @@ function simulateDockerOperation(operation, url, auth) {
   try {
     const authHeader = createBasicAuthHeader(USERNAME, PASSWORD);
     
-    console.log(`Ejecutando operación: ${operation}`);
+    console.debug(`Ejecutando operación: ${operation}`);
     
     switch (operation) {
       case 'login':
-        // Verificar autenticación con Harbor API
         const loginUrl = `https://${url}/api/v2.0/users/current`;
-        console.log(`Login URL: ${loginUrl}`);
+        console.debug(`Login URL: ${loginUrl}`);
+        
+        if (!validateUrl(loginUrl)) {
+          throw new Error(`URL de login inválida: ${loginUrl}`);
+        }
         
         response = http.get(loginUrl, {
           headers: {
@@ -101,20 +180,17 @@ function simulateDockerOperation(operation, url, auth) {
         
         success = response.status === 200;
         output = success ? 'Login successful' : `Login failed: ${response.status}`;
-        console.log(`Login result: ${output}`);
         break;
         
       case 'pull':
-        // Simular pull verificando que la imagen existe
         const imageInfo = parseImageName(IMAGE_NAME);
-        if (!imageInfo) {
-          throw new Error(`No se pudo parsear el nombre de imagen: ${IMAGE_NAME}`);
-        }
-        
         const { project, repo, tag } = imageInfo;
         const pullUrl = `https://${url}/api/v2.0/projects/${project}/repositories/${repo}/artifacts/${tag}`;
-        console.log(`Pull URL: ${pullUrl}`);
-        console.log(`Buscando imagen: ${IMAGE_NAME} (proyecto: ${project}, repo: ${repo}, tag: ${tag})`);
+        console.debug(`Pull URL: ${pullUrl}`);
+        
+        if (!validateUrl(pullUrl)) {
+          throw new Error(`URL de pull inválida: ${pullUrl}`);
+        }
         
         response = http.get(pullUrl, {
           headers: {
@@ -126,123 +202,49 @@ function simulateDockerOperation(operation, url, auth) {
         
         success = response.status === 200;
         output = success ? `Pull simulation successful for ${IMAGE_NAME}` : `Pull failed: ${response.status}`;
-        console.log(`Pull result: ${output}`);
         break;
         
       case 'rm':
-        // Simular rm (operación local, siempre exitosa)
         success = true;
         output = 'Remove simulation successful';
-        console.log(`RM result: ${output}`);
         break;
         
       default:
-        throw new Error(`Unknown operation: ${operation}`);
+        throw new Error(`Operación desconocida: ${operation}`);
     }
     
-    // Log de respuesta para debug
-    if (response && response.status !== 200) {
-      console.log(`Response status: ${response.status}`);
-      console.log(`Response body: ${response.body ? response.body.substring(0, 500) : 'No body'}`);
+    if (!success && response) {
+      console.warn(`Operación fallida: ${operation}`);
+      console.warn(`Status: ${response.status}`);
+      console.warn(`Headers: ${JSON.stringify(response.headers)}`);
+      if (response.body) {
+        console.warn(`Body (truncated): ${response.body.substring(0, 200)}...`);
+      }
     }
+    
+  } catch (e) {
+    output = e.message || 'Error desconocido';
+    console.error(`Error en ${operation}: ${output}`);
+    if (e.stack) {
+      console.error(`Stack trace: ${e.stack}`);
+    }
+  } finally {
+    const duration = (Date.now() - start) / 1000;
+    dockerOperationDuration.add(duration, { operation });
     
     if (success) {
       successCount.add(1, { operation });
     } else {
       errorCount.add(1, { operation });
-      console.error(`Error en ${operation}: ${output}`);
     }
     
-  } catch (e) {
-    errorCount.add(1, { operation });
-    output = e.message || 'Error desconocido';
-    console.error(`Error en ${operation}: ${output}`);
-    console.error(`Stack trace: ${e.stack}`);
+    console.log(`Operación ${operation} completada en ${duration.toFixed(2)}s: ${output}`);
   }
 
-  const duration = (Date.now() - start) / 1000;
-  dockerOperationDuration.add(duration, { operation });
-
-  return { success, duration, output };
+  return { success, duration: (Date.now() - start) / 1000, output };
 }
 
-// Función para obtener métricas de Harbor
-function getHarborMetrics() {
-  const metrics = {
-    cpu: { core: 0, registry: 0 },
-    memory: { core: 0, registry: 0 }
-  };
-
-  // Verificar si Prometheus está disponible
-  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') {
-    console.log('Prometheus URL no configurada o usando localhost, saltando métricas...');
-    return metrics;
-  }
-
-  try {
-    // Consultar CPU
-    const cpuUrl = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`;
-    const cpuRes = http.get(cpuUrl, {
-      timeout: '10s',
-      tags: { query: 'cpu_usage' }
-    });
-
-    if (cpuRes && cpuRes.status === 200) {
-      const data = cpuRes.json();
-      if (data && data.data && data.data.result && Array.isArray(data.data.result)) {
-        data.data.result.forEach(item => {
-          if (item && item.value && Array.isArray(item.value) && item.value.length > 1) {
-            const value = parseFloat(item.value[1]) || 0;
-            if (item.metric && item.metric.container) {
-              if (item.metric.container === 'core') {
-                metrics.cpu.core = value;
-              } else if (item.metric.container === 'registry') {
-                metrics.cpu.registry = value;
-              }
-            }
-          }
-        });
-      }
-    } else {
-      console.warn(`Error en consulta CPU: ${cpuRes?.status || 'No response'}`);
-    }
-
-    // Consultar Memoria
-    const memUrl = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`;
-    const memRes = http.get(memUrl, {
-      timeout: '10s',
-      tags: { query: 'memory_usage' }
-    });
-
-    if (memRes && memRes.status === 200) {
-      const data = memRes.json();
-      if (data && data.data && data.data.result && Array.isArray(data.data.result)) {
-        data.data.result.forEach(item => {
-          if (item && item.value && Array.isArray(item.value) && item.value.length > 1) {
-            const value = parseFloat(item.value[1]) || 0;
-            if (item.metric && item.metric.container) {
-              if (item.metric.container === 'core') {
-                metrics.memory.core = value;
-              } else if (item.metric.container === 'registry') {
-                metrics.memory.registry = value;
-              }
-            }
-          }
-        });
-      }
-    } else {
-      console.warn(`Error en consulta Memoria: ${memRes?.status || 'No response'}`);
-    }
-
-  } catch (e) {
-    console.warn(`Error obteniendo métricas de Prometheus: ${e.message}`);
-    // No incrementar errorCount aquí ya que las métricas son opcionales
-  }
-
-  return metrics;
-}
-
-// Función principal
+// Función principal mejorada
 export default function () {
   try {
     // 1. Obtener métricas de Harbor
@@ -280,8 +282,8 @@ export default function () {
       'memory registry under threshold': () => metrics.memory.registry < 4096,
     });
 
-    // Log de resultados para debug
-    console.log(`Results - Login: ${loginResult.success}, Pull: ${pullResult.success}, RM: ${rmResult.success}`);
+    // Log resumido de resultados
+    console.debug(`Resumen - Login: ${loginResult.success}, Pull: ${pullResult.success}, RM: ${rmResult.success}`);
 
   } catch (e) {
     console.error(`Error en función principal: ${e.message}`);
