@@ -1,3 +1,4 @@
+// k6 script for testing Harbor Docker registry with enhanced metrics and error handling
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { exec } from 'k6/execution';
@@ -45,16 +46,23 @@ function runCommand(cmd, operation) {
   let output = '';
 
   try {
+    // Ejecutar comando Docker usando exec de k6
     const result = exec(cmd, { timeout: '30s' });
-    if (result && typeof result === 'object') {
+    
+    if (result && result.exit_status !== undefined) {
       success = result.exit_status === 0;
       output = result.stdout || result.stderr || '';
-      if (success) successCount.add(1);
+      if (success) {
+        successCount.add(1, { operation });
+      } else {
+        errorCount.add(1, { operation });
+        console.error(`Error en ${operation}: ${output}`);
+      }
     } else {
-      throw new Error('Resultado no es un objeto válido');
+      throw new Error('Resultado del comando no es válido');
     }
   } catch (e) {
-    errorCount.add(1);
+    errorCount.add(1, { operation });
     output = e.message || 'Error desconocido';
     console.error(`Error en ${operation}: ${output}`);
   }
@@ -88,6 +96,8 @@ function getHarborMetrics() {
           if (item.metric?.container.includes('registry')) metrics.cpu.registry = value;
         });
       }
+    } else {
+      console.error(`Error en consulta CPU: ${cpuRes?.status || 'No response'}`);
     }
 
     // Consultar Memoria
@@ -105,6 +115,8 @@ function getHarborMetrics() {
           if (item.metric?.container.includes('registry')) metrics.memory.registry = value;
         });
       }
+    } else {
+      console.error(`Error en consulta Memoria: ${memRes?.status || 'No response'}`);
     }
 
   } catch (e) {
@@ -140,7 +152,7 @@ export default function () {
   }
 
   // 4. Operación Docker RM (solo si pull fue exitoso)
-  let rmResult = { success: true, duration: 0 };
+  let rmResult = { success: false, duration: 0 };
   if (pullResult.success) {
     rmResult = runCommand(
       `docker rmi ${HARBOR_URL}/${IMAGE_NAME}`,
@@ -148,7 +160,7 @@ export default function () {
     );
   }
 
-  // 5. Registrar métricas
+  // 5. Registrar métricas y checks
   requestRate.add(1);
   check({
     loginSuccess: loginResult.success,
@@ -172,7 +184,7 @@ export function handleSummary(data) {
   // Función para obtener valores de forma segura
   const getValue = (path, defaultValue = 0) => {
     try {
-      return path.split('.').reduce((obj, key) => obj[key], data) || defaultValue;
+      return path.split('.').reduce((obj, key) => (obj && obj[key] !== undefined ? obj[key] : defaultValue), data) || defaultValue;
     } catch {
       return defaultValue;
     }
@@ -181,17 +193,17 @@ export function handleSummary(data) {
   // Calcular porcentaje de éxito
   const totalChecks = getValue('metrics.checks.values.count', 1);
   const passedChecks = getValue('metrics.checks.values.passes', 0);
-  const successRate = (passedChecks / totalChecks * 100).toFixed(2);
+  const successRate = totalChecks > 0 ? (passedChecks / totalChecks * 100).toFixed(2) : '0.00';
 
   // Obtener métricas de recursos
-  const cpuCore = getValue('metrics.harbor_cpu_usage.values.avg', 0).toFixed(2);
-  const cpuRegistry = getValue('metrics.harbor_cpu_usage.values.avg', 0).toFixed(2);
-  const memCore = getValue('metrics.harbor_memory_usage.values.avg', 0).toFixed(2);
-  const memRegistry = getValue('metrics.harbor_memory_usage.values.avg', 0).toFixed(2);
+  const cpuCore = getValue('metrics.harbor_cpu_usage.values["component=core"].avg', 0).toFixed(2);
+  const cpuRegistry = getValue('metrics.harbor_cpu_usage.values["component=registry"].avg', 0).toFixed(2);
+  const memCore = getValue('metrics.harbor_memory_usage.values["component=core"].avg', 0).toFixed(2);
+  const memRegistry = getValue('metrics.harbor_memory_usage.values["component=registry"].avg', 0).toFixed(2);
 
   // Obtener métricas de rendimiento
   const avgDuration = getValue('metrics.operation_duration.values.avg', 0).toFixed(3);
-  const p95Duration = getValue('metrics.operation_duration.values.p(95)', 0).toFixed(3);
+  const p95Duration = getValue('metrics.operation_duration.values.p95', 0).toFixed(3);
   const reqRate = getValue('metrics.requests_per_second.values.rate', 0).toFixed(2);
 
   // Construir resumen legible
@@ -199,16 +211,16 @@ export function handleSummary(data) {
 ╔══════════════════════════════════════════════╗
 ║           RESUMEN DE PRUEBA HARBOR           ║
 ╠══════════════════════════════════════════════╣
-║ • DURACIÓN TOTAL: ${(getValue('state.testDuration', 0) / 1000).toFixed(0)} segundos
+║ • DURACIÓN TOTAL: ${(getValue('state.testDuration', 0) / 1000000000).toFixed(0)} segundos
 ║ • TASA DE ÉXITO: ${successRate}%
 ║ • ERRORES: ${getValue('metrics.error_count.values.count', 0)}
 ╠══════════════════════════════════════════════╣
 ║            MÉTRICAS DE RECURSOS              ║
 ╠══════════════════════════════════════════════╣
-║ • CPU CORE: ${cpuCore}% (máx: ${getValue('metrics.harbor_cpu_usage.values.max', 0).toFixed(2)}%)
-║ • CPU REGISTRY: ${cpuRegistry}% (máx: ${getValue('metrics.harbor_cpu_usage.values.max', 0).toFixed(2)}%)
-║ • MEMORIA CORE: ${memCore} MB (máx: ${getValue('metrics.harbor_memory_usage.values.max', 0).toFixed(2)} MB)
-║ • MEMORIA REGISTRY: ${memRegistry} MB (máx: ${getValue('metrics.harbor_memory_usage.values.max', 0).toFixed(2)} MB)
+║ • CPU CORE: ${cpuCore}% (máx: ${getValue('metrics.harbor_cpu_usage.values["component=core"].max', 0).toFixed(2)}%)
+║ • CPU REGISTRY: ${cpuRegistry}% (máx: ${getValue('metrics.harbor_cpu_usage.values["component=registry"].max', 0).toFixed(2)}%)
+║ • MEMORIA CORE: ${memCore} MB (máx: ${getValue('metrics.harbor_memory_usage.values["component=core"].max', 0).toFixed(2)} MB)
+║ • MEMORIA REGISTRY: ${memRegistry} MB (máx: ${getValue('metrics.harbor_memory_usage.values["component=registry"].max', 0).toFixed(2)} MB)
 ╠══════════════════════════════════════════════╣
 ║            MÉTRICAS DE RENDIMIENTO           ║
 ╠══════════════════════════════════════════════╣
@@ -218,9 +230,9 @@ export function handleSummary(data) {
 ╠══════════════════════════════════════════════╣
 ║            RESULTADOS DE OPERACIONES         ║
 ╠══════════════════════════════════════════════╣
-║ • LOGIN EXITOSO: ${getValue('root_group.checks.passes', 0)}/${getValue('root_group.checks.count', 0)}
-║ • PULL EXITOSO: ${getValue('root_group.checks.passes', 0)}/${getValue('root_group.checks.count', 0)}
-║ • RM EXITOSO: ${getValue('root_group.checks.passes', 0)}/${getValue('root_group.checks.count', 0)}
+║ • LOGIN EXITOSO: ${getValue('metrics.success_count.values["operation=login"].count', 0)}
+║ • PULL EXITOSO: ${getValue('metrics.success_count.values["operation=pull"].count', 0)}
+║ • RM EXITOSO: ${getValue('metrics.success_count.values["operation=rm"].count', 0)}
 ╚══════════════════════════════════════════════╝
 `;
 
