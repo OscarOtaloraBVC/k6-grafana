@@ -55,10 +55,15 @@ function simulateDockerOperation(operation, url, auth) {
     let response;
     const authHeader = createBasicAuthHeader(USERNAME, PASSWORD);
     
+    console.log(`Ejecutando operación: ${operation}`);
+    
     switch (operation) {
       case 'login':
         // Verificar autenticación con Harbor API
-        response = http.get(`https://${url}/api/v2.0/users/current`, {
+        const loginUrl = `https://${url}/api/v2.0/users/current`;
+        console.log(`Login URL: ${loginUrl}`);
+        
+        response = http.get(loginUrl, {
           headers: {
             'Authorization': authHeader,
             'Content-Type': 'application/json'
@@ -67,11 +72,20 @@ function simulateDockerOperation(operation, url, auth) {
         });
         success = response.status === 200;
         output = success ? 'Login successful' : `Login failed: ${response.status}`;
+        console.log(`Login result: ${output}`);
         break;
         
       case 'pull':
         // Simular pull verificando que la imagen existe
-        response = http.get(`https://${url}/api/v2.0/projects/${IMAGE_NAME.split('/')[0]}/repositories/${IMAGE_NAME.split('/')[1].split(':')[0]}/artifacts/${IMAGE_NAME.split(':')[1] || 'latest'}`, {
+        const [projectRepo, tag] = IMAGE_NAME.split(':');
+        const [project, repo] = projectRepo.split('/');
+        const tagName = tag || 'latest';
+        
+        const pullUrl = `https://${url}/api/v2.0/projects/${project}/repositories/${repo}/artifacts/${tagName}`;
+        console.log(`Pull URL: ${pullUrl}`);
+        console.log(`Buscando imagen: ${IMAGE_NAME} (proyecto: ${project}, repo: ${repo}, tag: ${tagName})`);
+        
+        response = http.get(pullUrl, {
           headers: {
             'Authorization': authHeader,
             'Content-Type': 'application/json'
@@ -79,13 +93,15 @@ function simulateDockerOperation(operation, url, auth) {
           timeout: '30s'
         });
         success = response.status === 200;
-        output = success ? 'Pull simulation successful' : `Pull failed: ${response.status}`;
+        output = success ? `Pull simulation successful for ${IMAGE_NAME}` : `Pull failed: ${response.status} - ${response.body}`;
+        console.log(`Pull result: ${output}`);
         break;
         
       case 'rm':
         // Simular rm (operación local, siempre exitosa)
         success = true;
         output = 'Remove simulation successful';
+        console.log(`RM result: ${output}`);
         break;
         
       default:
