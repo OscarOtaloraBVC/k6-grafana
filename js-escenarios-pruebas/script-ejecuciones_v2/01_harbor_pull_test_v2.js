@@ -28,16 +28,16 @@ export let options = {
   },
 };
 
-// Configuración del cluster Kubernetes
+// Variables de entorno
 const PROMETHEUS_URL = 'http://localhost:9090';
 const HARBOR_URL = 'https://test-nuam-registry.coffeesoft.org';
 const IMAGE_NAME = 'test-devops/ubuntu:xk6-1749486052417';
 
-// Consultas Prometheus optimizadas para Kubernetes
+// Consultas Prometheus
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="harbor",container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="harbor",container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Obtener métricas de Prometheus con manejo robusto de errores
+// Obtener métricas de Prometheus 
 function getHarborMetrics() {
   try {
     // Consultar CPU
