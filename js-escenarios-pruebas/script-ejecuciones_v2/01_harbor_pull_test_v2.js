@@ -29,7 +29,7 @@ export let options = {
 };
 
 // Variables de entorno
-const PROMETHEUS_URL = 'http://localhost:9090';
+const PROMETHEUS_URL = 'http://prometheus-kube-prometheus-prometheus.monitoring:9090';
 const HARBOR_URL = 'https://test-nuam-registry.coffeesoft.org';
 const IMAGE_NAME = 'test-devops/ubuntu:xk6-1749486052417';
 
