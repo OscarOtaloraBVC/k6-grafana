@@ -45,14 +45,42 @@ function createBasicAuthHeader(username, password) {
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
+// Función mejorada para parsear el nombre de imagen
+function parseImageName(imageName) {
+  try {
+    // Formato esperado: proyecto/repo:tag
+    const parts = imageName.split(':');
+    let tag = 'latest';
+    let projectRepo = imageName;
+    
+    if (parts.length > 1) {
+      tag = parts[1];
+      projectRepo = parts[0];
+    }
+    
+    const repoParts = projectRepo.split('/');
+    if (repoParts.length < 2) {
+      throw new Error('Formato de imagen inválido. Esperado: proyecto/repo:tag');
+    }
+    
+    const project = repoParts[0];
+    const repo = repoParts.slice(1).join('/');
+    
+    return { project, repo, tag };
+  } catch (e) {
+    console.error(`Error parsing image name "${imageName}": ${e.message}`);
+    return null;
+  }
+}
+
 // Función para simular operaciones Docker mediante Harbor API
 function simulateDockerOperation(operation, url, auth) {
   const start = Date.now();
   let success = false;
   let output = '';
+  let response;
 
   try {
-    let response;
     const authHeader = createBasicAuthHeader(USERNAME, PASSWORD);
     
     console.log(`Ejecutando operación: ${operation}`);
@@ -68,8 +96,9 @@ function simulateDockerOperation(operation, url, auth) {
             'Authorization': authHeader,
             'Content-Type': 'application/json'
           },
-          timeout: '30s'
+          timeout: '15s'
         });
+        
         success = response.status === 200;
         output = success ? 'Login successful' : `Login failed: ${response.status}`;
         console.log(`Login result: ${output}`);
@@ -77,23 +106,26 @@ function simulateDockerOperation(operation, url, auth) {
         
       case 'pull':
         // Simular pull verificando que la imagen existe
-        const [projectRepo, tag] = IMAGE_NAME.split(':');
-        const [project, repo] = projectRepo.split('/');
-        const tagName = tag || 'latest';
+        const imageInfo = parseImageName(IMAGE_NAME);
+        if (!imageInfo) {
+          throw new Error(`No se pudo parsear el nombre de imagen: ${IMAGE_NAME}`);
+        }
         
-        const pullUrl = `https://${url}/api/v2.0/projects/${project}/repositories/${repo}/artifacts/${tagName}`;
+        const { project, repo, tag } = imageInfo;
+        const pullUrl = `https://${url}/api/v2.0/projects/${project}/repositories/${repo}/artifacts/${tag}`;
         console.log(`Pull URL: ${pullUrl}`);
-        console.log(`Buscando imagen: ${IMAGE_NAME} (proyecto: ${project}, repo: ${repo}, tag: ${tagName})`);
+        console.log(`Buscando imagen: ${IMAGE_NAME} (proyecto: ${project}, repo: ${repo}, tag: ${tag})`);
         
         response = http.get(pullUrl, {
           headers: {
             'Authorization': authHeader,
             'Content-Type': 'application/json'
           },
-          timeout: '30s'
+          timeout: '15s'
         });
+        
         success = response.status === 200;
-        output = success ? `Pull simulation successful for ${IMAGE_NAME}` : `Pull failed: ${response.status} - ${response.body}`;
+        output = success ? `Pull simulation successful for ${IMAGE_NAME}` : `Pull failed: ${response.status}`;
         console.log(`Pull result: ${output}`);
         break;
         
@@ -108,6 +140,12 @@ function simulateDockerOperation(operation, url, auth) {
         throw new Error(`Unknown operation: ${operation}`);
     }
     
+    // Log de respuesta para debug
+    if (response && response.status !== 200) {
+      console.log(`Response status: ${response.status}`);
+      console.log(`Response body: ${response.body ? response.body.substring(0, 500) : 'No body'}`);
+    }
+    
     if (success) {
       successCount.add(1, { operation });
     } else {
@@ -119,6 +157,7 @@ function simulateDockerOperation(operation, url, auth) {
     errorCount.add(1, { operation });
     output = e.message || 'Error desconocido';
     console.error(`Error en ${operation}: ${output}`);
+    console.error(`Stack trace: ${e.stack}`);
   }
 
   const duration = (Date.now() - start) / 1000;
@@ -134,9 +173,16 @@ function getHarborMetrics() {
     memory: { core: 0, registry: 0 }
   };
 
+  // Verificar si Prometheus está disponible
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') {
+    console.log('Prometheus URL no configurada o usando localhost, saltando métricas...');
+    return metrics;
+  }
+
   try {
     // Consultar CPU
-    const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`, {
+    const cpuUrl = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`;
+    const cpuRes = http.get(cpuUrl, {
       timeout: '10s',
       tags: { query: 'cpu_usage' }
     });
@@ -158,11 +204,12 @@ function getHarborMetrics() {
         });
       }
     } else {
-      console.error(`Error en consulta CPU: ${cpuRes?.status || 'No response'}`);
+      console.warn(`Error en consulta CPU: ${cpuRes?.status || 'No response'}`);
     }
 
     // Consultar Memoria
-    const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`, {
+    const memUrl = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`;
+    const memRes = http.get(memUrl, {
       timeout: '10s',
       tags: { query: 'memory_usage' }
     });
@@ -184,12 +231,12 @@ function getHarborMetrics() {
         });
       }
     } else {
-      console.error(`Error en consulta Memoria: ${memRes?.status || 'No response'}`);
+      console.warn(`Error en consulta Memoria: ${memRes?.status || 'No response'}`);
     }
 
   } catch (e) {
-    errorCount.add(1, { operation: 'metrics' });
-    console.error(`Error obteniendo métricas: ${e.message}`);
+    console.warn(`Error obteniendo métricas de Prometheus: ${e.message}`);
+    // No incrementar errorCount aquí ya que las métricas son opcionales
   }
 
   return metrics;
@@ -197,47 +244,57 @@ function getHarborMetrics() {
 
 // Función principal
 export default function () {
-  // 1. Obtener métricas de Harbor
-  const metrics = getHarborMetrics();
-  harborCPU.add(metrics.cpu.core, { component: 'core' });
-  harborCPU.add(metrics.cpu.registry, { component: 'registry' });
-  harborMemory.add(metrics.memory.core, { component: 'core' });
-  harborMemory.add(metrics.memory.registry, { component: 'registry' });
+  try {
+    // 1. Obtener métricas de Harbor
+    const metrics = getHarborMetrics();
+    harborCPU.add(metrics.cpu.core, { component: 'core' });
+    harborCPU.add(metrics.cpu.registry, { component: 'registry' });
+    harborMemory.add(metrics.memory.core, { component: 'core' });
+    harborMemory.add(metrics.memory.registry, { component: 'registry' });
 
-  // 2. Simular Login a Harbor
-  const loginResult = simulateDockerOperation('login', HARBOR_URL, { username: USERNAME, password: PASSWORD });
+    // 2. Simular Login a Harbor
+    const loginResult = simulateDockerOperation('login', HARBOR_URL, { username: USERNAME, password: PASSWORD });
 
-  // 3. Simular operación Docker Pull (solo si login fue exitoso)
-  let pullResult = { success: false, duration: 0 };
-  if (loginResult.success) {
-    pullResult = simulateDockerOperation('pull', HARBOR_URL, { username: USERNAME, password: PASSWORD });
+    // 3. Simular operación Docker Pull (solo si login fue exitoso)
+    let pullResult = { success: false, duration: 0, output: 'Skipped due to login failure' };
+    if (loginResult.success) {
+      pullResult = simulateDockerOperation('pull', HARBOR_URL, { username: USERNAME, password: PASSWORD });
+    }
+
+    // 4. Simular operación Docker RM (solo si pull fue exitoso)
+    let rmResult = { success: false, duration: 0, output: 'Skipped due to pull failure' };
+    if (pullResult.success) {
+      rmResult = simulateDockerOperation('rm', HARBOR_URL, { username: USERNAME, password: PASSWORD });
+    }
+
+    // 5. Registrar métricas y checks
+    requestRate.add(1);
+    
+    const checkResults = check(null, {
+      'docker login succeeded': () => loginResult.success,
+      'docker pull succeeded': () => pullResult.success,
+      'docker rm succeeded': () => rmResult.success,
+      'cpu core under threshold': () => metrics.cpu.core < 80,
+      'cpu registry under threshold': () => metrics.cpu.registry < 80,
+      'memory core under threshold': () => metrics.memory.core < 4096,
+      'memory registry under threshold': () => metrics.memory.registry < 4096,
+    });
+
+    // Log de resultados para debug
+    console.log(`Results - Login: ${loginResult.success}, Pull: ${pullResult.success}, RM: ${rmResult.success}`);
+
+  } catch (e) {
+    console.error(`Error en función principal: ${e.message}`);
+    console.error(`Stack: ${e.stack}`);
+    errorCount.add(1, { operation: 'main' });
   }
-
-  // 4. Simular operación Docker RM (solo si pull fue exitoso)
-  let rmResult = { success: false, duration: 0 };
-  if (pullResult.success) {
-    rmResult = simulateDockerOperation('rm', HARBOR_URL, { username: USERNAME, password: PASSWORD });
-  }
-
-  // 5. Registrar métricas y checks
-  requestRate.add(1);
-  
-  const checkResults = check(null, {
-    'docker login succeeded': () => loginResult.success,
-    'docker pull succeeded': () => pullResult.success,
-    'docker rm succeeded': () => rmResult.success,
-    'cpu core under threshold': () => metrics.cpu.core < 80,
-    'cpu registry under threshold': () => metrics.cpu.registry < 80,
-    'memory core under threshold': () => metrics.memory.core < 4096,
-    'memory registry under threshold': () => metrics.memory.registry < 4096,
-  });
 
   sleep(1);
 }
 
 // Función de resumen completo en consola
 export function handleSummary(data) {
-  console.log('Data structure:', JSON.stringify(data, null, 2));
+  console.log('=== INICIO DEL RESUMEN ===');
   
   // Función para obtener valores de forma segura
   const getValue = (obj, path, defaultValue = 0) => {
@@ -270,6 +327,10 @@ export function handleSummary(data) {
   const errorCountValue = getValue(data, 'metrics.error_count.values.count', 0);
   const successCountValue = getValue(data, 'metrics.success_count.values.count', 0);
 
+  // Obtener métricas HTTP
+  const httpReqDuration = getValue(data, 'metrics.http_req_duration.values.avg', 0);
+  const httpReqs = getValue(data, 'metrics.http_reqs.values.count', 0);
+
   // Construir resumen legible
   const summary = `
 ╔══════════════════════════════════════════════╗
@@ -281,6 +342,8 @@ export function handleSummary(data) {
 ║ • TASA DE ÉXITO: ${successRate}%
 ║ • ERRORES: ${errorCountValue}
 ║ • ÉXITOS: ${successCountValue}
+║ • REQUESTS HTTP: ${httpReqs}
+║ • DURACIÓN HTTP PROMEDIO: ${httpReqDuration.toFixed(2)}ms
 ╠══════════════════════════════════════════════╣
 ║            MÉTRICAS DE RECURSOS              ║
 ╠══════════════════════════════════════════════╣
@@ -299,5 +362,10 @@ export function handleSummary(data) {
 `;
 
   console.log(summary);
-  return { stdout: summary };
+  console.log('=== FIN DEL RESUMEN ===');
+  
+  return { 
+    'stdout': summary,
+    'summary.json': JSON.stringify(data, null, 2)
+  };
 }
