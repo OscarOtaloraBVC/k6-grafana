@@ -17,45 +17,52 @@ const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Métricas
+// Variables para almacenar métricas
+let prometheusMetrics = {
+  cpu: [],
+  memory: [],
+  lastUpdated: null
+};
+
+// Métricas personalizadas
 const successfulRequests = new Counter('successful_requests');
 const failedRequests = new Counter('failed_requests');
 const responseTimes = new Trend('response_times');
-let prometheusData = {
-  cpu: 'No recopilado',
-  memory: 'No recopilado'
-};
 
-// Función para obtener métricas de Prometheus
-async function getPrometheusMetrics() {
-  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
+// Función para obtener métricas de Prometheus de forma síncrona
+function fetchPrometheusMetricsSync() {
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') {
+    return;
+  }
 
   try {
-    // Obtener CPU
+    // Obtener métricas de CPU
     const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
     if (cpuRes.status === 200) {
-      const data = cpuRes.json();
-      if (data.status === "success") {
-        prometheusData.cpu = data.data.result.map(r => ({
+      const cpuData = cpuRes.json();
+      if (cpuData.status === "success") {
+        prometheusMetrics.cpu = cpuData.data.result.map(r => ({
           container: r.metric.container,
-          cpu_usage: `${parseFloat(r.value[1]).toFixed(2)}%`
+          usage: `${parseFloat(r.value[1]).toFixed(2)}%`
         }));
       }
     }
 
-    // Obtener Memoria
+    // Obtener métricas de Memoria
     const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
     if (memRes.status === 200) {
-      const data = memRes.json();
-      if (data.status === "success") {
-        prometheusData.memory = data.data.result.map(r => ({
+      const memData = memRes.json();
+      if (memData.status === "success") {
+        prometheusMetrics.memory = memData.data.result.map(r => ({
           container: r.metric.container,
-          memory_usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
+          usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
         }));
       }
     }
+    
+    prometheusMetrics.lastUpdated = new Date().toISOString();
   } catch (error) {
-    console.error('Error obteniendo métricas de Prometheus:', error);
+    console.error('Error fetching Prometheus metrics:', error);
   }
 }
 
@@ -70,11 +77,11 @@ export const options = {
     http_req_duration: ['p(95)<5000'],
     http_req_failed: ['rate<0.1']
   },
-  teardownTimeout: '30s'
+  teardownTimeout: '60s' // Aumentamos el timeout del teardown
 };
 
 // Función principal
-export default async function () {
+export default function () {
   const authToken = encoding.b64encode(`${USERNAME}:${PASSWORD}`);
   const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   
@@ -110,19 +117,28 @@ export default async function () {
     failedRequests.add(1);
   }
 
+  // Actualizar métricas cada 10 iteraciones
+  if (exec.scenario.iterationInTest % 10 === 0) {
+    fetchPrometheusMetricsSync();
+  }
+
   sleep(1);
 }
 
 // Teardown - Obtener métricas finales
 export function teardown() {
-  getPrometheusMetrics();
+  fetchPrometheusMetricsSync();
 }
 
-// Resumen final con manejo seguro de errores
+// Resumen final mejorado
 export function handleSummary(data) {
-  // Función segura para obtener métricas
-  const safeMetric = (metric, prop = 'count', def = 0) => 
-    data.metrics[metric] ? data.metrics[metric][prop] || def : def;
+  // Asegurarse de tener las métricas más recientes
+  fetchPrometheusMetricsSync();
+
+  // Función para manejar métricas potencialmente no definidas
+  const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
+    return data.metrics[metric] ? (data.metrics[metric][prop] || defaultValue) : defaultValue;
+  };
 
   // Calcular métricas básicas
   const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
@@ -134,35 +150,38 @@ export function handleSummary(data) {
   const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
   // Formatear métricas de Prometheus
-  const formatPrometheusData = (data) => {
-    if (typeof data === 'string') return data;
-    return data.map(d => `${d.container}: ${d.cpu_usage || d.memory_usage}`).join('\n');
+  const formatPrometheus = (data) => {
+    if (!Array.isArray(data) || data.length === 0) return 'No disponible';
+    return data.map(item => `${item.container}: ${item.usage}`).join('\n           ');
   };
 
-  // Crear resumen
-  const summary = {
-    "Duración": `${duration}s`,
-    "Iteraciones": iterations,
-    "Éxitos": successes,
-    "Fallos": failures,
-    "Tasa éxito": `${successRate}%`,
-    "Tiempo respuesta (avg)": `${avgResponseTime}ms`,
-    "RPS": rps,
-    "Uso de CPU": formatPrometheusData(prometheusData.cpu),
-    "Uso de Memoria": formatPrometheusData(prometheusData.memory)
-  };
+  // Crear resumen completo
+  const summaryText = `
+============================== RESUMEN FINAL ==============================
+Duración:          ${duration} segundos
+Iteraciones:       ${iterations}
+Peticiones exitosas: ${successes}
+Peticiones fallidas: ${failures}
+Tasa de éxito:     ${successRate}%
+Tiempo respuesta:  ${avgResponseTime} ms (avg)
+Peticiones/seg:    ${rps}
+
+Uso de CPU:
+${formatPrometheus(prometheusMetrics.cpu)}
+
+Uso de Memoria:
+${formatPrometheus(prometheusMetrics.memory)}
+
+Última actualización: ${prometheusMetrics.lastUpdated || 'N/A'}
+=======================================================================
+`;
 
   // Mostrar en consola
-  console.log("\n" + "=".repeat(60));
-  console.log("RESUMEN FINAL");
-  console.log("=".repeat(60));
-  for (const [key, value] of Object.entries(summary)) {
-    console.log(`${key.padEnd(20)}: ${value}`);
-  }
-  console.log("=".repeat(60));
+  console.log(summaryText);
 
+  // También devolver el resumen estándar de k6
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
-    "summary.json": JSON.stringify(summary, null, 2)
+    "summary.txt": summaryText
   };
 }
