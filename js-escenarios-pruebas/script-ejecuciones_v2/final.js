@@ -67,10 +67,10 @@ function fetchPrometheusMetrics() {
 // Configuración de la prueba
 export const options = {
   stages: [
-    { duration: '1m15s', target: 50 },
-    { duration: '1m15s', target: 25 },
+    //{ duration: '1m15s', target: 25 },
     { duration: '1m15s', target: 15 },
-    { duration: '1m15s', target: 10 }
+    { duration: '1m15s', target: 10 },
+    { duration: '1m15s', target: 5 }
   ],
   thresholds: {
     http_req_duration: ['p(95)<5000'],
