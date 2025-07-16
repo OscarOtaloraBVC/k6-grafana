@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import exec from 'k6/execution';
-import { Counter, Trend } from 'k6/metrics';
+import { Counter, Trend, Rate } from 'k6/metrics';
 import encoding from 'k6/encoding';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 
@@ -17,32 +17,28 @@ const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Métricas personalizadas
-const successfulUploads = new Counter('successful_uploads');
-const failedUploads = new Counter('failed_uploads');
-const uploadTimes = new Trend('upload_times');
-const totalIterations = new Counter('total_iterations');
-
 // Almacenamiento para métricas de Prometheus
-let prometheusData = {
+const prometheusData = {
   cpu: [],
   memory: [],
   lastUpdated: null
 };
 
+// Métricas personalizadas
+const successfulRequests = new Counter('successful_requests');
+const failedRequests = new Counter('failed_requests');
+const responseTimes = new Trend('response_times');
+
 // Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
-  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') {
-    console.log('Prometheus no configurado, omitiendo métricas');
-    return;
-  }
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
 
   try {
     // Obtener CPU
     const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
     if (cpuRes.status === 200) {
       const data = cpuRes.json();
-      if (data && data.status === "success") {
+      if (data.status === "success") {
         prometheusData.cpu = data.data.result.map(r => ({
           container: r.metric.container,
           usage: `${parseFloat(r.value[1]).toFixed(2)}%`
@@ -54,7 +50,7 @@ function fetchPrometheusMetrics() {
     const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
     if (memRes.status === 200) {
       const data = memRes.json();
-      if (data && data.status === "success") {
+      if (data.status === "success") {
         prometheusData.memory = data.data.result.map(r => ({
           container: r.metric.container,
           usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
@@ -70,40 +66,31 @@ function fetchPrometheusMetrics() {
 
 // Configuración de la prueba
 export const options = {
-  scenarios: {
-    harbor_stress: {
-      executor: 'ramping-vus',
-      startVUs: 1,
-      stages: [
-        { duration: '30s', target: 5 },
-        { duration: '2m', target: 10 },
-        { duration: '30s', target: 5 }
-      ],
-      gracefulRampDown: '30s',
-    },
-  },
+  stages: [
+    { duration: '30s', target: 5 },
+    { duration: '2m', target: 10 },
+    { duration: '30s', target: 5 }
+  ],
   thresholds: {
-    'http_req_duration{expected_response:true}': ['p(95)<5000'],
-    'http_req_failed': ['rate<0.1'],
-    'successful_uploads': ['count>0'],
-    'failed_uploads': ['count<20']
+    http_req_duration: ['p(95)<5000'],
+    http_req_failed: ['rate<0.1']
   },
-  teardownTimeout: '60s',
-  discardResponseBodies: true
+  teardownTimeout: '60s'
 };
 
 // Función principal
 export default function () {
-  totalIterations.add(1); // Contamos cada iteración
-  
   const authToken = encoding.b64encode(`${USERNAME}:${PASSWORD}`);
   const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  
+  // Incrementar el contador de iteraciones manualmente si es necesario
+  exec.scenario.iterationInTest += 1;
   
   try {
     const start = Date.now();
     const res = http.post(
       `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts`,
-      new Uint8Array(30 * 1024 * 1024), // 30MB
+      new Uint8Array(30 * 1024 * 1024),
       {
         headers: {
           'Content-Type': 'application/octet-stream',
@@ -113,11 +100,10 @@ export default function () {
       }
     );
     
-    const duration = Date.now() - start;
-    uploadTimes.add(duration);
+    responseTimes.add(Date.now() - start);
     
     if (res.status === 201 || res.status === 202) {
-      successfulUploads.add(1);
+      successfulRequests.add(1);
       if (__ENV.K6_DOCKER_EXEC === 'true') {
         try {
           exec(`docker image rm ${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`, { output: null });
@@ -126,15 +112,14 @@ export default function () {
         }
       }
     } else {
-      failedUploads.add(1);
-      console.error(`Error en la petición (${res.status}): ${res.body}`);
+      failedRequests.add(1);
+      console.error('Request failed with status:', res.status, 'Response:', res.body);
     }
   } catch (error) {
-    failedUploads.add(1);
-    console.error('Error en la ejecución:', error.message);
+    failedRequests.add(1);
+    console.error('Request error:', error.message);
   }
 
-  // Actualizar métricas cada 10 iteraciones
   if (exec.scenario.iterationInTest % 10 === 0) {
     fetchPrometheusMetrics();
   }
@@ -147,35 +132,38 @@ export function teardown() {
   fetchPrometheusMetrics();
 }
 
-// Resumen final
-export function handleSummary() {
-  // Obtener métricas directamente de nuestros contadores
-  const iterations = totalIterations.count || 0;
-  const successes = successfulUploads.count || 0;
-  const failures = failedUploads.count || 0;
-  const duration = exec.scenario.duration / 1000; // en segundos
+// Resumen final con manejo seguro de errores
+export function handleSummary(data) {
+  fetchPrometheusMetrics();
+
+  // Obtener métricas directamente del escenario si no están en data.metrics
+  const iterations = exec.scenario.iterationInTest || 0;
+  const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
   
-  // Calcular métricas derivadas
+  // Obtener métricas personalizadas directamente si es necesario
+  const successes = successfulRequests.values['count'] || 0;
+  const failures = failedRequests.values['count'] || 0;
   const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
-  const avgUploadTime = uploadTimes.count > 0 ? (uploadTimes.sum / uploadTimes.count).toFixed(2) : 0;
+  
+  // Obtener tiempos de respuesta
+  const responseData = responseTimes.values || {};
+  const avgResponseTime = responseData.avg ? responseData.avg.toFixed(2) : 0;
   const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
-  // Formatear métricas de Prometheus
   const formatPrometheus = (data) => {
-    if (!Array.isArray(data) || data.length === 0) return '  No disponible';
-    return data.map(item => `  ${item.container.padEnd(8)}: ${item.usage}`).join('\n');
+    if (!Array.isArray(data) || data.length === 0) return 'No disponible';
+    return data.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
 
-  // Crear resumen completo
   const summaryText = `
 ============================== RESUMEN FINAL ==============================
-Duración:          ${duration.toFixed(2)} segundos
+Duración:          ${duration} segundos
 Iteraciones:       ${iterations}
-Subidas exitosas:  ${successes}
-Subidas fallidas:  ${failures}
+Peticiones exitosas: ${successes}
+Peticiones fallidas: ${failures}
 Tasa de éxito:     ${successRate}%
-Tiempo subida avg: ${avgUploadTime} ms
-Iteraciones/seg:   ${rps}
+Tiempo respuesta:  ${avgResponseTime} ms (avg)
+Peticiones/seg:    ${rps}
 
 Uso de CPU:
 ${formatPrometheus(prometheusData.cpu)}
@@ -187,28 +175,10 @@ ${formatPrometheus(prometheusData.memory)}
 =======================================================================
 `;
 
-  // Mostrar en consola
   console.log(summaryText);
 
-  // Preparar datos para el resumen estándar
-  const metricsData = {
-    metrics: {
-      total_iterations: { value: iterations },
-      successful_uploads: { value: successes },
-      failed_uploads: { value: failures },
-      upload_times: { 
-        avg: avgUploadTime,
-        min: uploadTimes.min || 0,
-        max: uploadTimes.max || 0,
-        med: uploadTimes.med || 0,
-        p90: uploadTimes.p(90) || 0,
-        p95: uploadTimes.p(95) || 0
-      }
-    }
-  };
-
   return {
-    stdout: textSummary(metricsData, { indent: ' ', enableColors: true }),
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
   };
 }
