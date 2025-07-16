@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { Counter, Rate, Trend } from 'k6/metrics';
 import exec from 'k6/execution';
-import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 
 // Variables de entorno
 const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';  
@@ -11,169 +11,251 @@ const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
 const PROJECT = __ENV.HARBOR_PROJECT || 'test-devops';
 const IMAGE = __ENV.HARBOR_IMAGE || 'ubuntu';
 const TAG = __ENV.HARBOR_TAG || 'xk6-1749486052417';
-const DOCKER_HOST = __ENV.DOCKER_HOST || 'unix:///var/run/docker.sock';
 
-// Consultas Prometheus
+// Consultas Prometheus específicas
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Generador de imágenes aleatorias
-function generateRandomImage() {
-    const minSize = 28 * 1024 * 1024; // 28MB
-    const maxSize = 50 * 1024 * 1024; // 50MB
-    const size = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
-    return new Uint8Array(size).map(() => Math.floor(Math.random() * 256));
-}
+// Métricas personalizadas
+const dockerPushCounter = new Counter('docker_push_total');
+const dockerPushRate = new Rate('docker_push_success_rate');
+const dockerPushDuration = new Trend('docker_push_duration');
+const dockerRmCounter = new Counter('docker_rm_total');
+const dockerRmRate = new Rate('docker_rm_success_rate');
+const harbourCpuUsage = new Trend('harbor_cpu_usage_percent');
+const harbourMemoryUsage = new Trend('harbor_memory_usage_mb');
 
-// Autenticación en Harbor
-function getHarborToken() {
-    const url = `${HARBOR_URL}/service/token?service=harbor-registry&scope=repository:${PROJECT}/${IMAGE}:pull,push`;
-    const credentials = `${USERNAME}:${PASSWORD}`;
-    const headers = {
-        'Authorization': `Basic ${btoa(credentials)}`,
-    };
-    
-    const res = http.get(url, { headers: headers });
-    if (res.status !== 200) {
-        throw new Error(`Failed to get Harbor token: ${res.body}`);
-    }
-    
-    return JSON.parse(res.body).token;
-}
-
-// Subir imagen a Harbor
-function uploadImage(token, imageData, tag) {
-    const url = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/blobs/uploads/`;
-    const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/octet-stream',
-    };
-    
-    // Iniciar upload
-    const initRes = http.post(url, null, { headers: headers });
-    if (initRes.status !== 202) {
-        throw new Error(`Failed to init upload: ${initRes.body}`);
-    }
-    
-    // Obtener URL de upload
-    const uploadUrl = initRes.headers['Location'];
-    
-    // Subir datos
-    const uploadRes = http.put(`${uploadUrl}&digest=sha256:${createSHA256Hash(imageData)}`, imageData, {
-        headers: headers,
-    });
-    
-    if (uploadRes.status !== 201) {
-        throw new Error(`Failed to upload image: ${uploadRes.body}`);
-    }
-    
-    return uploadRes;
-}
-
-// Función simulada para crear hash (en producción usaría una librería adecuada)
-function createSHA256Hash(data) {
-    // Esto es una simulación - en un caso real usarías crypto.subtle.digest()
-    return Array.from(data).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 64);
-}
-
-// Obtener métricas de Prometheus
-async function getPrometheusMetrics(query) {
-    const url = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(query)}`;
-    const res = http.get(url);
-    
-    if (res.status !== 200) {
-        console.error(`Error querying Prometheus: ${res.body}`);
-        return null;
-    }
-    
-    return JSON.parse(res.body).data.result;
-}
-
-// Eliminar imagen Docker
-function dockerRm(imageRef) {
-    try {
-        const cmd = `docker -H ${DOCKER_HOST} rmi ${imageRef}`;
-        const result = exec(cmd, { output: 'inherit' });
-        return result.status === 0;
-    } catch (error) {
-        console.error(`Error deleting image ${imageRef}: ${error}`);
-        return false;
-    }
-}
-
+// Configuración de prueba
 export const options = {
-    stages: [
-        { duration: '1m25s', target: 50 },
-        { duration: '1m25s', target: 25 },
-        { duration: '1m25s', target: 15 },
-        { duration: '1m25s', target: 10 }
-    ],
-    thresholds: {
-        http_req_duration: ['p(95)<1000'],
-        http_req_failed: ['rate<0.01'],
-    },
-    duration: '5m',
+  stages: [
+    // Fase 1: 50 imágenes/segundo por 1 minuto 25 segundos
+    { duration: '1m25s', target: 50 },
+    
+    // Fase 2: 25 imágenes/segundo por 1 minuto 25 segundos
+    { duration: '1m25s', target: 25 },
+    
+    // Fase 3: 15 imágenes/segundo por 1 minuto 25 segundos
+    { duration: '1m25s', target: 15 },
+    
+    // Fase 4: 10 imágenes/segundo por 1 minuto 25 segundos
+    { duration: '1m25s', target: 10 }
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<1000'], // 95% de las solicitudes deben completarse en <1s
+    http_req_failed: ['rate<0.01'],    // Tasa de error menor al 1%
+    docker_push_success_rate: ['rate>0.95'], // 95% de éxito en push
+    docker_rm_success_rate: ['rate>0.95'],   // 95% de éxito en rm
+  },
 };
 
-export default function () {
-    // Obtener token de Harbor
-    const token = getHarborToken();
-    const imageData = generateRandomImage();
-    const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-    const imageRef = `${HARBOR_URL}/${PROJECT}/${IMAGE}:${randomTag}`;
-    
-    // Subir imagen
-    const uploadStart = Date.now();
-    let uploadSuccess = false;
-    try {
-        const uploadRes = uploadImage(token, imageData, randomTag);
-        uploadSuccess = uploadRes.status === 201;
-    } catch (e) {
-        console.error(`Upload failed: ${e.message}`);
-        uploadSuccess = false;
-    }
-    
-    const uploadDuration = Date.now() - uploadStart;
-    
-    // Eliminar imagen
-    sleep(0.5);
-    const deleteSuccess = dockerRm(imageRef);
-    
-    // Métricas
-    return {
-        upload_duration: uploadDuration,
-        upload_success: uploadSuccess,
-        delete_success: deleteSuccess,
-    };
+// Generador de imágenes aleatorias en el rango de tamaño especificado
+function generateRandomImage() {
+  const minSize = 28 * 1024 * 1024; // 28MB en bytes
+  const maxSize = 50 * 1024 * 1024; // 50MB en bytes
+  const size = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
+  
+  // Generar datos binarios aleatorios (simulando imagen Docker)
+  return new Array(size).fill(0).map(() => Math.floor(Math.random() * 256));
 }
 
-export function handleSummary(data) {
-    // Obtener métricas de Prometheus
-    const cpuMetrics = getPrometheusMetrics(CPU_QUERY);
-    const memoryMetrics = getPrometheusMetrics(MEMORY_QUERY);
-    
-    // Procesar métricas
-    let prometheusData = {};
-    if (cpuMetrics) {
-        cpuMetrics.forEach((m) => {
-            prometheusData[`cpu_usage_${m.metric.container}`] = m.value[1];
-        });
+// Función para autenticación con Harbor
+function authenticateHarbor() {
+  const authUrl = `${HARBOR_URL}/api/v2.0/projects`;
+  const credentials = `${USERNAME}:${PASSWORD}`;
+  const encodedCredentials = btoa(credentials);
+  
+  const response = http.get(authUrl, {
+    headers: {
+      'Authorization': `Basic ${encodedCredentials}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  
+  return response.status === 200;
+}
+
+// Función para obtener métricas de Prometheus
+function getPrometheusMetrics() {
+  try {
+    // Consulta CPU
+    const cpuResponse = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
+    if (cpuResponse.status === 200) {
+      const cpuData = JSON.parse(cpuResponse.body);
+      if (cpuData.data && cpuData.data.result && cpuData.data.result.length > 0) {
+        const cpuValue = parseFloat(cpuData.data.result[0].value[1]);
+        harbourCpuUsage.add(cpuValue);
+      }
     }
     
-    if (memoryMetrics) {
-        memoryMetrics.forEach((m) => {
-            prometheusData[`memory_usage_${m.metric.container}`] = m.value[1];
-        });
+    // Consulta Memoria
+    const memoryResponse = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
+    if (memoryResponse.status === 200) {
+      const memoryData = JSON.parse(memoryResponse.body);
+      if (memoryData.data && memoryData.data.result && memoryData.data.result.length > 0) {
+        const memoryValue = parseFloat(memoryData.data.result[0].value[1]);
+        harbourMemoryUsage.add(memoryValue);
+      }
     }
+  } catch (error) {
+    console.warn(`Error obteniendo métricas de Prometheus: ${error.message}`);
+  }
+}
+
+// Función para simular docker push
+function dockerPush(imageName) {
+  const startTime = Date.now();
+  
+  // Simular la carga de imagen a Harbor
+  const imageData = generateRandomImage();
+  const url = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/blobs/uploads/`;
+  
+  const credentials = `${USERNAME}:${PASSWORD}`;
+  const encodedCredentials = btoa(credentials);
+  
+  const headers = {
+    'Authorization': `Basic ${encodedCredentials}`,
+    'Content-Type': 'application/octet-stream',
+  };
+  
+  const response = http.post(url, { file: imageData }, { headers: headers });
+  
+  const duration = Date.now() - startTime;
+  dockerPushDuration.add(duration);
+  dockerPushCounter.add(1);
+  
+  const success = response.status >= 200 && response.status < 300;
+  dockerPushRate.add(success);
+  
+  return {
+    success: success,
+    duration: duration,
+    imageName: imageName,
+    status: response.status
+  };
+}
+
+// Función para simular docker rmi
+function dockerRmi(imageName) {
+  const startTime = Date.now();
+  
+  // Simular eliminación de imagen de Harbor
+  const url = `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts/${TAG}`;
+  
+  const credentials = `${USERNAME}:${PASSWORD}`;
+  const encodedCredentials = btoa(credentials);
+  
+  const headers = {
+    'Authorization': `Basic ${encodedCredentials}`,
+    'Content-Type': 'application/json',
+  };
+  
+  const response = http.del(url, null, { headers: headers });
+  
+  const duration = Date.now() - startTime;
+  dockerRmCounter.add(1);
+  
+  const success = response.status >= 200 && response.status < 300;
+  dockerRmRate.add(success);
+  
+  return {
+    success: success,
+    duration: duration,
+    imageName: imageName,
+    status: response.status
+  };
+}
+
+// Función principal de prueba
+export default function() {
+  // Verificar autenticación cada 10 iteraciones
+  if (exec.vu.iterationInScenario % 10 === 0) {
+    if (!authenticateHarbor()) {
+      console.error('Error de autenticación con Harbor');
+      return;
+    }
+  }
+  
+  // Obtener métricas de Prometheus cada 5 iteraciones
+  if (exec.vu.iterationInScenario % 5 === 0) {
+    getPrometheusMetrics();
+  }
+  
+  // Generar nombre único para la imagen
+  const uniqueTag = `${TAG}-${exec.vu.idInTest}-${exec.vu.iterationInScenario}-${Date.now()}`;
+  const imageName = `${HARBOR_URL}/${PROJECT}/${IMAGE}:${uniqueTag}`;
+  
+  // Ejecutar docker push
+  const pushResult = dockerPush(imageName);
+  
+  check(pushResult, {
+    'docker push exitoso': (r) => r.success,
+    'docker push tiempo < 5s': (r) => r.duration < 5000,
+  });
+  
+  // Si el push fue exitoso, ejecutar docker rmi después de un breve delay
+  if (pushResult.success) {
+    sleep(0.1); // Breve pausa antes de eliminar
     
-    // Resumen consolidado
-    const combinedData = {
-        ...data,
-        prometheus: prometheusData,
-    };
+    const rmResult = dockerRmi(imageName);
     
-    return {
-        stdout: textSummary(combinedData, { indent: ' ', enableColors: true }),
-        'summary.json': JSON.stringify(combinedData),
-    };
+    check(rmResult, {
+      'docker rmi exitoso': (r) => r.success,
+      'docker rmi tiempo < 2s': (r) => r.duration < 2000,
+    });
+  }
+  
+  // Ajustar sleep para cumplir con la tasa de solicitudes por segundo
+  sleep(1);
+}
+
+// Función de configuración inicial
+export function setup() {
+  console.log('=== CONFIGURACIÓN INICIAL ===');
+  console.log(`Harbor URL: ${HARBOR_URL}`);
+  console.log(`Proyecto: ${PROJECT}`);
+  console.log(`Imagen: ${IMAGE}`);
+  console.log(`Tag base: ${TAG}`);
+  console.log(`Prometheus URL: ${PROMETHEUS_URL}`);
+  console.log('================================');
+  
+  // Verificar conectividad
+  if (!authenticateHarbor()) {
+    throw new Error('No se pudo autenticar con Harbor');
+  }
+  
+  console.log('✓ Autenticación con Harbor exitosa');
+  return { startTime: Date.now() };
+}
+
+// Función de limpieza final
+export function teardown(data) {
+  const endTime = Date.now();
+  const totalDuration = (endTime - data.startTime) / 1000;
+  
+  console.log('\n=== RESUMEN DE LA PRUEBA ===');
+  console.log(`Duración total: ${totalDuration.toFixed(2)} segundos`);
+  console.log(`Pushes totales: ${dockerPushCounter.value}`);
+  console.log(`Eliminaciones totales: ${dockerRmCounter.value}`);
+  console.log(`Tasa de éxito push: ${(dockerPushRate.value * 100).toFixed(2)}%`);
+  console.log(`Tasa de éxito rm: ${(dockerRmRate.value * 100).toFixed(2)}%`);
+  
+  // Obtener métricas finales de Prometheus
+  getPrometheusMetrics();
+  
+  console.log('\n=== MÉTRICAS DE HARBOR ===');
+  console.log(`CPU promedio: ${harbourCpuUsage.avg ? harbourCpuUsage.avg.toFixed(2) : 'N/A'}%`);
+  console.log(`Memoria promedio: ${harbourMemoryUsage.avg ? harbourMemoryUsage.avg.toFixed(2) : 'N/A'} MB`);
+  console.log(`CPU máximo: ${harbourCpuUsage.max ? harbourCpuUsage.max.toFixed(2) : 'N/A'}%`);
+  console.log(`Memoria máxima: ${harbourMemoryUsage.max ? harbourMemoryUsage.max.toFixed(2) : 'N/A'} MB`);
+  
+  console.log('\n=== MÉTRICAS DE RENDIMIENTO ===');
+  console.log(`Tiempo promedio push: ${dockerPushDuration.avg ? dockerPushDuration.avg.toFixed(2) : 'N/A'} ms`);
+  console.log(`Tiempo máximo push: ${dockerPushDuration.max ? dockerPushDuration.max.toFixed(2) : 'N/A'} ms`);
+  console.log(`Percentil 95 push: ${dockerPushDuration.p95 ? dockerPushDuration.p95.toFixed(2) : 'N/A'} ms`);
+  
+  console.log('\n=== PETICIONES POR SEGUNDO ===');
+  const rps = dockerPushCounter.value / totalDuration;
+  console.log(`Promedio: ${rps.toFixed(2)} peticiones/segundo`);
+  
+  console.log('============================');
 }
