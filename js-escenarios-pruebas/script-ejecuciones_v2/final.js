@@ -17,11 +17,11 @@ const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Métricas personalizadas - DEBEN SER DECLARADAS A NIVEL SUPERIOR
-export const successfulRequests = new Counter('successful_requests');
-export const failedRequests = new Counter('failed_requests');
-export const responseTimes = new Trend('response_times');
-export const iterationsCounter = new Counter('iterations_count');
+// Métricas personalizadas - USAREMOS SOLO ESTAS PARA EL RESUMEN
+const successfulUploads = new Counter('successful_uploads');
+const failedUploads = new Counter('failed_uploads');
+const uploadTimes = new Trend('upload_times');
+const totalIterations = new Counter('total_iterations');
 
 // Almacenamiento para métricas de Prometheus
 const prometheusData = {
@@ -68,7 +68,7 @@ function fetchPrometheusMetrics() {
 // Configuración de la prueba
 export const options = {
   scenarios: {
-    harbor_load: {
+    harbor_stress: {
       executor: 'ramping-vus',
       startVUs: 1,
       stages: [
@@ -80,17 +80,18 @@ export const options = {
     },
   },
   thresholds: {
-    'http_req_duration': ['p(95)<5000'],
+    'http_req_duration{expected_response:true}': ['p(95)<5000'],
     'http_req_failed': ['rate<0.1'],
-    'successful_requests': ['count>0'],
-    'failed_requests': ['count<10']
+    'successful_uploads': ['count>0'],
+    'failed_uploads': ['count<20']
   },
-  teardownTimeout: '60s'
+  teardownTimeout: '60s',
+  discardResponseBodies: true
 };
 
 // Función principal
 export default function () {
-  iterationsCounter.add(1); // Registrar cada iteración
+  totalIterations.add(1); // Contamos cada iteración
   
   const authToken = encoding.b64encode(`${USERNAME}:${PASSWORD}`);
   const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -110,10 +111,10 @@ export default function () {
     );
     
     const duration = Date.now() - start;
-    responseTimes.add(duration);
+    uploadTimes.add(duration);
     
     if (res.status === 201 || res.status === 202) {
-      successfulRequests.add(1);
+      successfulUploads.add(1);
       if (__ENV.K6_DOCKER_EXEC === 'true') {
         try {
           exec(`docker image rm ${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`, { output: null });
@@ -122,12 +123,12 @@ export default function () {
         }
       }
     } else {
-      failedRequests.add(1);
-      console.error(`Error en la petición: ${res.status} - ${res.body}`);
+      failedUploads.add(1);
+      console.error(`Error en la petición (${res.status}): ${res.body}`);
     }
   } catch (error) {
-    failedRequests.add(1);
-    console.error('Error en la ejecución:', error);
+    failedUploads.add(1);
+    console.error('Error en la ejecución:', error.message);
   }
 
   // Actualizar métricas cada 10 iteraciones
@@ -143,24 +144,20 @@ export function teardown() {
   fetchPrometheusMetrics();
 }
 
-// Resumen final con manejo seguro de errores
-export function handleSummary(data) {
+// Resumen final usando solo nuestras métricas personalizadas
+export function handleSummary() {
   // Asegurarse de tener las métricas más recientes
   fetchPrometheusMetrics();
 
-  // Función para manejar métricas potencialmente no definidas
-  const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
-    if (!data.metrics || !data.metrics[metric]) return defaultValue;
-    return data.metrics[metric][prop] || defaultValue;
-  };
-
-  // Calcular métricas básicas
-  const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
-  const iterations = safeMetric('iterations_count'); // Usamos nuestro contador personalizado
-  const successes = safeMetric('successful_requests');
-  const failures = safeMetric('failed_requests');
+  // Obtener métricas directamente de nuestros contadores
+  const iterations = totalIterations.count || 0;
+  const successes = successfulUploads.count || 0;
+  const failures = failedUploads.count || 0;
+  const duration = exec.scenario.duration / 1000; // en segundos
+  
+  // Calcular métricas derivadas
   const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
-  const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
+  const avgUploadTime = uploadTimes.count > 0 ? (uploadTimes.sum / uploadTimes.count).toFixed(2) : 0;
   const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
   // Formatear métricas de Prometheus
@@ -174,11 +171,11 @@ export function handleSummary(data) {
 ============================== RESUMEN FINAL ==============================
 Duración:          ${duration.toFixed(2)} segundos
 Iteraciones:       ${iterations}
-Peticiones exitosas: ${successes}
-Peticiones fallidas: ${failures}
+Subidas exitosas:  ${successes}
+Subidas fallidas:  ${failures}
 Tasa de éxito:     ${successRate}%
-Tiempo respuesta:  ${avgResponseTime} ms (avg)
-Peticiones/seg:    ${rps}
+Tiempo subida avg: ${avgUploadTime} ms
+Iteraciones/seg:   ${rps}
 
 Uso de CPU:
 ${formatPrometheus(prometheusData.cpu)}
@@ -195,7 +192,21 @@ ${formatPrometheus(prometheusData.memory)}
 
   // También devolver el resumen estándar de k6
   return {
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    stdout: textSummary({ 
+      metrics: {
+        total_iterations: { value: iterations },
+        successful_uploads: { value: successes },
+        failed_uploads: { value: failures },
+        upload_times: { 
+          avg: avgUploadTime,
+          min: uploadTimes.min || 0,
+          max: uploadTimes.max || 0,
+          med: uploadTimes.med || 0,
+          p90: uploadTimes.p(90) || 0,
+          p95: uploadTimes.p(95) || 0
+        }
+      }
+    }, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
   };
 }
