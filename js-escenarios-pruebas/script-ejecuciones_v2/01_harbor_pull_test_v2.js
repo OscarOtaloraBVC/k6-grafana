@@ -116,21 +116,42 @@ export default function () {
 }
 
 export function handleSummary(data) {
-  // Resumen básico
+  // Calcular métricas con verificación de existencia para evitar errores
+  const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
+  const iterations = data.metrics.iterations ? data.metrics.iterations.count : 0;
+  const successes = data.metrics.successful_requests ? data.metrics.successful_requests.count : 0;
+  const failures = data.metrics.failed_requests ? data.metrics.failed_requests.count : 0;
+  const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
+  const avgResponseTime = data.metrics.response_times ? data.metrics.response_times.avg.toFixed(2) : 0;
+  const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
+
+  // Resumen detallado
   const summary = {
-    "Duración": `${data.state.testRunDurationMs / 1000}s`,
-    "Iteraciones": data.metrics.iterations.count,
-    "Éxitos": data.metrics.successful_requests.count,
-    "Fallos": data.metrics.failed_requests.count,
-    "Tasa éxito": `${(data.metrics.successful_requests.count / data.metrics.iterations.count * 100).toFixed(2)}%`,
-    "Tiempo respuesta (avg)": `${data.metrics.response_times.avg.toFixed(2)}ms`,
-    "RPS": (data.metrics.iterations.count / (data.state.testRunDurationMs / 1000)).toFixed(2)
+    "Duración de la prueba": `${duration} segundos`,
+    "Total de iteraciones": iterations,
+    "Peticiones exitosas": successes,
+    "Peticiones fallidas": failures,
+    "Tasa de éxito": `${successRate}%`,
+    "Tiempo de respuesta promedio": `${avgResponseTime} ms`,
+    "Peticiones por segundo (RPS)": rps,
+    "Uso de CPU (Prometheus)": __ENV.PROMETHEUS_URL ? CPU_QUERY,
+    "Uso de memoria (Prometheus)": __ENV.PROMETHEUS_URL ? MEMORY_QUERY
   };
 
-  console.log("\n===== RESUMEN FINAL =====");
+  // Mostrar resumen en consola con formato
+  console.log("\n" + "=".repeat(50));
+  console.log("RESUMEN FINAL DE LA PRUEBA");
+  console.log("=".repeat(50));
+  
   for (const [key, value] of Object.entries(summary)) {
-    console.log(`${key}: ${value}`);
+    console.log(`• ${key.padEnd(30)}: ${value}`);
   }
+  
+  console.log("=".repeat(50) + "\n");
 
-  return { stdout: "Resumen completado" };
+  // También devolver el resumen como texto plano
+  return {
+    "stdout": textSummary(data, { indent: " ", enableColors: true }),
+    "summary.json": JSON.stringify(summary, null, 2)
+  };
 }
