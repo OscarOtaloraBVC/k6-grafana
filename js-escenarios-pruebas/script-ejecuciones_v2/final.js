@@ -1,7 +1,7 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
 import exec from 'k6/execution';
-import { Counter, Trend, Rate } from 'k6/metrics';
+import { Counter, Trend } from 'k6/metrics';
 import encoding from 'k6/encoding';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 
@@ -17,14 +17,14 @@ const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Métricas personalizadas - USAREMOS SOLO ESTAS PARA EL RESUMEN
+// Métricas personalizadas
 const successfulUploads = new Counter('successful_uploads');
 const failedUploads = new Counter('failed_uploads');
 const uploadTimes = new Trend('upload_times');
 const totalIterations = new Counter('total_iterations');
 
 // Almacenamiento para métricas de Prometheus
-const prometheusData = {
+let prometheusData = {
   cpu: [],
   memory: [],
   lastUpdated: null
@@ -32,14 +32,17 @@ const prometheusData = {
 
 // Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
-  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') {
+    console.log('Prometheus no configurado, omitiendo métricas');
+    return;
+  }
 
   try {
     // Obtener CPU
     const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
     if (cpuRes.status === 200) {
       const data = cpuRes.json();
-      if (data.status === "success") {
+      if (data && data.status === "success") {
         prometheusData.cpu = data.data.result.map(r => ({
           container: r.metric.container,
           usage: `${parseFloat(r.value[1]).toFixed(2)}%`
@@ -51,7 +54,7 @@ function fetchPrometheusMetrics() {
     const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
     if (memRes.status === 200) {
       const data = memRes.json();
-      if (data.status === "success") {
+      if (data && data.status === "success") {
         prometheusData.memory = data.data.result.map(r => ({
           container: r.metric.container,
           usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
@@ -144,11 +147,8 @@ export function teardown() {
   fetchPrometheusMetrics();
 }
 
-// Resumen final usando solo nuestras métricas personalizadas
+// Resumen final
 export function handleSummary() {
-  // Asegurarse de tener las métricas más recientes
-  fetchPrometheusMetrics();
-
   // Obtener métricas directamente de nuestros contadores
   const iterations = totalIterations.count || 0;
   const successes = successfulUploads.count || 0;
@@ -190,23 +190,25 @@ ${formatPrometheus(prometheusData.memory)}
   // Mostrar en consola
   console.log(summaryText);
 
-  // También devolver el resumen estándar de k6
-  return {
-    stdout: textSummary({ 
-      metrics: {
-        total_iterations: { value: iterations },
-        successful_uploads: { value: successes },
-        failed_uploads: { value: failures },
-        upload_times: { 
-          avg: avgUploadTime,
-          min: uploadTimes.min || 0,
-          max: uploadTimes.max || 0,
-          med: uploadTimes.med || 0,
-          p90: uploadTimes.p(90) || 0,
-          p95: uploadTimes.p(95) || 0
-        }
+  // Preparar datos para el resumen estándar
+  const metricsData = {
+    metrics: {
+      total_iterations: { value: iterations },
+      successful_uploads: { value: successes },
+      failed_uploads: { value: failures },
+      upload_times: { 
+        avg: avgUploadTime,
+        min: uploadTimes.min || 0,
+        max: uploadTimes.max || 0,
+        med: uploadTimes.med || 0,
+        p90: uploadTimes.p(90) || 0,
+        p95: uploadTimes.p(95) || 0
       }
-    }, { indent: ' ', enableColors: true }),
+    }
+  };
+
+  return {
+    stdout: textSummary(metricsData, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
   };
 }
