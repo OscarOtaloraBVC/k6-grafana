@@ -160,7 +160,12 @@ export function handleSummary(data) {
   const summaryText = `
 ============================== RESUMEN =================================
 Duración:          ${durationInMinutes} minutos
-
+Iteraciones:       ${iterations}
+Subidas exitosas:  ${successes}
+Subidas fallidas:  ${failures}
+Tasa de éxito:     ${successRate}%
+Tiempo respuesta:  ${avgResponseTime} ms (avg)
+Iteraciones/seg:   ${rps}
 Uso de CPU:
 ${formatPrometheus(prometheusData.cpu)}
 
