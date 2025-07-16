@@ -1,6 +1,5 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Harbor } from 'k6/x/harbor';
 import exec from 'k6/execution';
 import { Counter, Trend, Rate } from 'k6/metrics';
 
@@ -65,43 +64,44 @@ export let options = {
 function deleteDockerImage(imageName) {
   try {
     const cmd = `docker image rm ${imageName}`;
-    const result = exec(cmd);
-    console.log(`Deleted image: ${imageName} - ${result}`);
+    const result = __ENV.K6_DOCKER_EXEC === 'true' ? exec(cmd, { output: null }) : console.log(`[SIMULATED] docker image rm ${imageName}`);
+    console.log(`Deleted image: ${imageName}`);
   } catch (error) {
     console.error(`Error deleting image ${imageName}: ${error}`);
   }
 }
 
 export default async function () {
-  // Autenticación en Harbor
-  const authRes = http.post(`${HARBOR_URL}/c/login`, {
+  // Autenticación en Harbor usando API básica
+  const authRes = http.post(`${HARBOR_URL}/api/v2.0/users/login`, {
     principal: USERNAME,
     password: PASSWORD
+  }, {
+    headers: { 'Content-Type': 'application/json' }
   });
   
-  if (!authRes.cookies['sid']) {
+  if (authRes.status !== 200) {
     failedRequests.add(1);
+    console.error('Authentication failed:', authRes.status, authRes.body);
     return;
   }
   
-  const cookies = {
-    sid: authRes.cookies['sid'][0].value
-  };
+  const authToken = authRes.json().token;
   
   // Generar y subir imagen
   const randomImage = generateRandomImage();
   const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const imageName = `${PROJECT}/${IMAGE}:${randomTag}`;
+  const imageName = `${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`;
   
   const startTime = new Date().getTime();
   const uploadRes = http.post(
     `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts`,
-    { file: randomImage },
+    randomImage,
     {
       headers: {
         'Content-Type': 'application/octet-stream',
-      },
-      cookies: cookies
+        'Authorization': `Bearer ${authToken}`
+      }
     }
   );
   
@@ -111,7 +111,7 @@ export default async function () {
   responseTimes.add(duration);
   requestRate.add(1);
   
-  if (uploadRes.status === 201) {
+  if (uploadRes.status === 201 || uploadRes.status === 202) {
     successfulRequests.add(1);
     
     // Eliminar la imagen después de subirla
@@ -127,8 +127,8 @@ export default async function () {
     const memoryMetrics = await getPrometheusMetrics(MEMORY_QUERY);
     
     console.log('--- Métricas de Harbor ---');
-    console.log('CPU Usage (%):', JSON.stringify(cpuMetrics, null, 2));
-    console.log('Memory Usage (MB):', JSON.stringify(memoryMetrics, null, 2));
+    if (cpuMetrics) console.log('CPU Usage (%):', JSON.stringify(cpuMetrics, null, 2));
+    if (memoryMetrics) console.log('Memory Usage (MB):', JSON.stringify(memoryMetrics, null, 2));
   }
   
   sleep(1);
@@ -150,10 +150,8 @@ export function handleSummary(data) {
   const cpuMetrics = getPrometheusMetrics(CPU_QUERY);
   const memoryMetrics = getPrometheusMetrics(MEMORY_QUERY);
   
-  if (cpuMetrics && memoryMetrics) {
-    metrics['CPU Usage Harbor (%)'] = JSON.stringify(cpuMetrics, null, 2);
-    metrics['Memory Usage Harbor (MB)'] = JSON.stringify(memoryMetrics, null, 2);
-  }
+  if (cpuMetrics) metrics['CPU Usage Harbor (%)'] = JSON.stringify(cpuMetrics, null, 2);
+  if (memoryMetrics) metrics['Memory Usage Harbor (MB)'] = JSON.stringify(memoryMetrics, null, 2);
   
   // Imprimir resumen en consola
   console.log('\n===== RESUMEN DE LA PRUEBA =====');
