@@ -24,7 +24,7 @@ const prometheusData = {
   lastUpdated: null
 };
 
-// Métricas personalizadas
+// Métricas Solicitudes
 const successfulRequests = new Counter('successful_requests');
 const failedRequests = new Counter('failed_requests');
 const responseTimes = new Trend('response_times');
@@ -94,7 +94,7 @@ export default function () {
           'Content-Type': 'application/octet-stream',
           'Authorization': `Basic ${authToken}`
         },
-        timeout: '120s'
+        timeout: '240s'
       }
     );
     
