@@ -30,16 +30,17 @@ const harbourMemoryUsage = new Trend('harbor_memory_usage_mb');
 export const options = {
   stages: [
     // Fase 1: 50 imágenes/segundo por 1 minuto 25 segundos
-    { duration: '1m25s', target: 50 },
-    
+    //{ duration: '1m25s', target: 50 },
+    { duration: '1m25s', target: 10 },
     // Fase 2: 25 imágenes/segundo por 1 minuto 25 segundos
-    { duration: '1m25s', target: 25 },
-    
-    // Fase 3: 15 imágenes/segundo por 1 minuto 25 segundos
+    //{ duration: '1m25s', target: 25 },
     { duration: '1m25s', target: 15 },
-    
+    // Fase 3: 15 imágenes/segundo por 1 minuto 25 segundos
+    //{ duration: '1m25s', target: 15 },
+    { duration: '1m25s', target: 20 },
     // Fase 4: 10 imágenes/segundo por 1 minuto 25 segundos
-    { duration: '1m25s', target: 10 }
+    //{ duration: '1m25s', target: 10 }
+    { duration: '1m25s', target: 25 },
   ],
   thresholds: {
     http_req_duration: ['p(95)<1000'], // 95% de las solicitudes deben completarse en <1s
