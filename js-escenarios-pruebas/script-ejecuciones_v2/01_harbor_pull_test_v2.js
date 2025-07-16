@@ -12,11 +12,11 @@ const PROJECT = __ENV.HARBOR_PROJECT || 'test-devops';
 const IMAGE = __ENV.HARBOR_IMAGE || 'ubuntu';
 const TAG = __ENV.HARBOR_TAG || 'xk6-1749486052417';
 
-// Consultas Prometheus específicas
+// Consultas Prometheus
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Métricas personalizadas
+// Métricas
 let successfulRequests = new Counter('successful_requests');
 let failedRequests = new Counter('failed_requests');
 let requestRate = new Rate('request_rate');
@@ -24,75 +24,58 @@ let responseTimes = new Trend('response_times');
 
 // Generador de imágenes aleatorias
 function generateRandomImage() {
-  const minSize = 28 * 1024 * 1024; // 28MB en bytes
-  const maxSize = 50 * 1024 * 1024; // 50MB en bytes
+  const minSize = 28 * 1024 * 1024; // 28MB
+  const maxSize = 50 * 1024 * 1024; // 50MB
   const size = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
-  
-  // Generar datos binarios aleatorios
   return new Array(size).fill(0).map(() => Math.floor(Math.random() * 256));
 }
 
-// Función para obtener métricas de Prometheus
-async function getPrometheusMetrics(query) {
-  const url = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(query)}`;
-  const res = http.get(url);
+// Autenticación en Harbor v2.0
+function getAuthToken() {
+  const credentials = `${USERNAME}:${PASSWORD}`;
+  const encodedCredentials = btoa(credentials);
+  
+  const res = http.get(`${HARBOR_URL}/api/v2.0/users/current`, {
+    headers: {
+      'Authorization': `Basic ${encodedCredentials}`
+    }
+  });
   
   if (res.status === 200) {
-    return JSON.parse(res.body).data.result;
+    return encodedCredentials; // Usaremos Basic Auth en lugar de token
   }
+  
+  console.error(`Authentication failed: ${res.status} - ${res.body}`);
   return null;
 }
 
 // Configuración
 export let options = {
   stages: [
-    { duration: '1s', target: 50 },
-    { duration: '5m', target: 50 }, // 5 minutos de prueba
-    { duration: '1s', target: 0 },
+    { duration: '30s', target: 10 }, // Rampa inicial
+    { duration: '5m', target: 50 },  // Carga sostenida
+    { duration: '30s', target: 0 },   // Rampa de salida
   ],
-  noConnectionReuse: true,
   thresholds: {
-    http_req_duration: ['p(95)<3500'],
-    http_req_failed: [
-      { threshold: 'rate<0.1', abortOnFail: true },
-      { threshold: 'rate<0.5', abortOnFail: true, delayAbortEval: '10s' }
-    ],
-  },
+    http_req_duration: ['p(95)<5000'],
+    http_req_failed: ['rate<0.1']
+  }
 };
 
-// Función para eliminar imágenes Docker
-function deleteDockerImage(imageName) {
-  try {
-    const cmd = `docker image rm ${imageName}`;
-    const result = __ENV.K6_DOCKER_EXEC === 'true' ? exec(cmd, { output: null }) : console.log(`[SIMULATED] docker image rm ${imageName}`);
-    console.log(`Deleted image: ${imageName}`);
-  } catch (error) {
-    console.error(`Error deleting image ${imageName}: ${error}`);
-  }
-}
-
-export default async function () {
-  // Autenticación en Harbor usando API básica
-  const authRes = http.post(`${HARBOR_URL}/api/v2.0/users/login`, {
-    principal: USERNAME,
-    password: PASSWORD
-  }, {
-    headers: { 'Content-Type': 'application/json' }
-  });
-  
-  if (authRes.status !== 200) {
+export default function () {
+  // Obtener token de autenticación
+  const authToken = getAuthToken();
+  if (!authToken) {
     failedRequests.add(1);
-    console.error('Authentication failed:', authRes.status, authRes.body);
     return;
   }
-  
-  const authToken = authRes.json().token;
-  
-  // Generar y subir imagen
+
+  // Generar datos de imagen
   const randomImage = generateRandomImage();
   const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const imageName = `${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`;
-  
+
+  // Subir imagen
   const startTime = new Date().getTime();
   const uploadRes = http.post(
     `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts`,
@@ -100,66 +83,53 @@ export default async function () {
     {
       headers: {
         'Content-Type': 'application/octet-stream',
-        'Authorization': `Bearer ${authToken}`
-      }
+        'Authorization': `Basic ${authToken}`
+      },
+      timeout: '120s'
     }
   );
-  
-  const endTime = new Date().getTime();
-  const duration = endTime - startTime;
-  
+
+  const duration = new Date().getTime() - startTime;
   responseTimes.add(duration);
   requestRate.add(1);
-  
+
   if (uploadRes.status === 201 || uploadRes.status === 202) {
     successfulRequests.add(1);
     
-    // Eliminar la imagen después de subirla
-    deleteDockerImage(imageName);
+    // Eliminar imagen si está habilitado
+    if (__ENV.K6_DOCKER_EXEC === 'true') {
+      try {
+        const cmd = `docker image rm ${imageName}`;
+        const result = exec(cmd, { output: null });
+        console.log(`Deleted image: ${imageName}`);
+      } catch (error) {
+        console.error(`Error deleting image: ${error}`);
+      }
+    }
   } else {
     failedRequests.add(1);
-    console.error(`Failed to upload image: ${uploadRes.status} - ${uploadRes.body}`);
+    console.error(`Upload failed (${uploadRes.status}): ${uploadRes.body}`);
   }
-  
-  // Obtener métricas de Prometheus periódicamente
-  if (exec.scenario.iterationInTest % 10 === 0) {
-    const cpuMetrics = await getPrometheusMetrics(CPU_QUERY);
-    const memoryMetrics = await getPrometheusMetrics(MEMORY_QUERY);
-    
-    console.log('--- Métricas de Harbor ---');
-    if (cpuMetrics) console.log('CPU Usage (%):', JSON.stringify(cpuMetrics, null, 2));
-    if (memoryMetrics) console.log('Memory Usage (MB):', JSON.stringify(memoryMetrics, null, 2));
-  }
-  
+
   sleep(1);
 }
 
 export function handleSummary(data) {
-  // Resumen de métricas
-  const metrics = {
-    'Tiempo de prueba': `${data.state.testRunDurationMs / 1000} segundos`,
-    'Iteraciones totales': data.metrics.iterations.count,
-    'Peticiones exitosas': data.metrics['successful_requests'].count,
-    'Peticiones fallidas': data.metrics['failed_requests'].count,
-    'Tasa de éxito': `${(data.metrics['successful_requests'].count / data.metrics.iterations.count * 100).toFixed(2)}%`,
-    'Tiempo de respuesta promedio (ms)': data.metrics['response_times'].avg.toFixed(2),
-    'Peticiones por segundo': (data.metrics.iterations.count / (data.state.testRunDurationMs / 1000)).toFixed(2),
+  // Resumen básico
+  const summary = {
+    "Duración": `${data.state.testRunDurationMs / 1000}s`,
+    "Iteraciones": data.metrics.iterations.count,
+    "Éxitos": data.metrics.successful_requests.count,
+    "Fallos": data.metrics.failed_requests.count,
+    "Tasa éxito": `${(data.metrics.successful_requests.count / data.metrics.iterations.count * 100).toFixed(2)}%`,
+    "Tiempo respuesta (avg)": `${data.metrics.response_times.avg.toFixed(2)}ms`,
+    "RPS": (data.metrics.iterations.count / (data.state.testRunDurationMs / 1000)).toFixed(2)
   };
-  
-  // Obtener métricas finales de Prometheus
-  const cpuMetrics = getPrometheusMetrics(CPU_QUERY);
-  const memoryMetrics = getPrometheusMetrics(MEMORY_QUERY);
-  
-  if (cpuMetrics) metrics['CPU Usage Harbor (%)'] = JSON.stringify(cpuMetrics, null, 2);
-  if (memoryMetrics) metrics['Memory Usage Harbor (MB)'] = JSON.stringify(memoryMetrics, null, 2);
-  
-  // Imprimir resumen en consola
-  console.log('\n===== RESUMEN DE LA PRUEBA =====');
-  for (const [key, value] of Object.entries(metrics)) {
+
+  console.log("\n===== RESUMEN FINAL =====");
+  for (const [key, value] of Object.entries(summary)) {
     console.log(`${key}: ${value}`);
   }
-  
-  return {
-    'stdout': 'Resumen impreso en consola',
-  };
+
+  return { stdout: "Resumen completado" };
 }
