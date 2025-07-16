@@ -141,6 +141,7 @@ export function handleSummary(data) {
 
   // Calcular métricas básicas
   const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
+  const durationInMinutes = (durationInSeconds / 60).toFixed(2);
   const iterations = safeMetric('iterations');
   const successes = safeMetric('successful_requests');
   const failures = safeMetric('failed_requests');
@@ -157,7 +158,8 @@ export function handleSummary(data) {
   // Crear resumen completo
   const summaryText = `
 ============================== RESUMEN =================================
-Duración:          ${duration} segundos
+
+Duración:          ${durationInMinutes} segundos
 
 Uso de CPU:
 ${formatPrometheus(prometheusData.cpu)}
