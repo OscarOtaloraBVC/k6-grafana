@@ -1,8 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import exec from 'k6/execution';
-import { HarborClient } from './modules/harbor.js'; // Asumiendo que tienes un módulo Harbor client
-import { PrometheusClient } from './modules/prometheus.js'; // Asumiendo que tienes un módulo Prometheus client
 
 // Variables de entorno
 const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
@@ -36,51 +34,78 @@ export const options = {
   },
 };
 
-// Clientes
-const harbor = new HarborClient(HARBOR_URL, USERNAME, PASSWORD);
-const prometheus = new PrometheusClient(PROMETHEUS_URL);
+// Función para autenticación en Harbor
+function harborAuthenticate() {
+  const url = `${HARBOR_URL}/c/login`;
+  const payload = JSON.stringify({
+    principal: USERNAME,
+    password: PASSWORD
+  });
+  
+  const params = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+  
+  return http.post(url, payload, params);
+}
+
+// Función para pull de imagen
+function harborPullImage(project, image, tag) {
+  const url = `${HARBOR_URL}/v2/${project}/${image}/manifests/${tag}`;
+  const params = {
+    headers: {
+      'Accept': 'application/vnd.docker.distribution.manifest.v2+json',
+    },
+    auth: 'basic',
+  };
+  
+  return http.get(url, params);
+}
 
 // Función para obtener métricas de Prometheus
-async function getMetrics() {
-  try {
-    const cpuMetrics = await prometheus.query(CPU_QUERY);
-    const memoryMetrics = await prometheus.query(MEMORY_QUERY);
-    
-    console.log('--- Métricas de Harbor ---');
-    console.log('Uso de CPU (%):', JSON.stringify(cpuMetrics, null, 2));
-    console.log('Uso de Memoria (MB):', JSON.stringify(memoryMetrics, null, 2));
-  } catch (error) {
-    console.error('Error obteniendo métricas:', error);
+function getPrometheusMetrics(query) {
+  const url = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(query)}`;
+  const res = http.get(url);
+  
+  if (res.status === 200) {
+    try {
+      return JSON.parse(res.body).data.result;
+    } catch (e) {
+      console.error('Error parsing Prometheus response:', e);
+      return null;
+    }
+  } else {
+    console.error('Error fetching Prometheus metrics:', res.status, res.body);
+    return null;
   }
 }
 
 // Función para eliminar imagen Docker local
 function deleteLocalImage() {
+  const imageRef = `${HARBOR_URL}/${PROJECT}/${IMAGE}:${TAG}`;
   try {
-    const imageRef = `${HARBOR_URL}/${PROJECT}/${IMAGE}:${TAG}`;
-    const cmd = `docker image rm ${imageRef}`;
-    const result = exec(cmd, { output: 'inherit' });
-    
-    if (result.exit_code !== 0) {
-      console.warn(`No se pudo eliminar la imagen ${imageRef}`);
-    } else {
-      console.log(`Imagen ${imageRef} eliminada localmente`);
-    }
+    // Esto es un ejemplo, en k6 puro no podemos ejecutar comandos shell directamente
+    // En una implementación real necesitarías usar k6/execution o un módulo externo
+    console.log(`[SIMULACIÓN] Eliminando imagen local: docker image rm ${imageRef}`);
+    return true;
   } catch (error) {
     console.error('Error eliminando imagen local:', error);
+    return false;
   }
 }
 
 // Función principal de la prueba
-export default async function () {
+export default function () {
   // Paso 1: Autenticación en Harbor
-  const authRes = harbor.authenticate();
+  const authRes = harborAuthenticate();
   check(authRes, {
     'Autenticación exitosa': (r) => r.status === 200,
   });
 
   // Paso 2: Pull de la imagen
-  const pullRes = harbor.pullImage(PROJECT, IMAGE, TAG);
+  const pullRes = harborPullImage(PROJECT, IMAGE, TAG);
   check(pullRes, {
     'Pull de imagen exitoso': (r) => r.status === 200,
   });
@@ -97,7 +122,16 @@ export default async function () {
 // Función de manejo de resumen
 export function handleSummary(data) {
   // Obtener métricas finales de Prometheus
-  getMetrics();
+  const cpuMetrics = getPrometheusMetrics(CPU_QUERY);
+  const memoryMetrics = getPrometheusMetrics(MEMORY_QUERY);
+  
+  console.log('\n--- Métricas de Harbor ---');
+  if (cpuMetrics) {
+    console.log('Uso de CPU (%):', JSON.stringify(cpuMetrics, null, 2));
+  }
+  if (memoryMetrics) {
+    console.log('Uso de Memoria (MB):', JSON.stringify(memoryMetrics, null, 2));
+  }
 
   // Resumen estándar de K6
   const summary = {
