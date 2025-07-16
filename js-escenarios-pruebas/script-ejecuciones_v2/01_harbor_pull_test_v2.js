@@ -2,6 +2,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Rate, Trend } from 'k6/metrics';
 import exec from 'k6/execution';
+import encoding from 'k6/encoding';
 
 // Variables de entorno
 const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';  
@@ -62,7 +63,7 @@ function generateRandomImage() {
 function authenticateHarbor() {
   const authUrl = `${HARBOR_URL}/api/v2.0/projects`;
   const credentials = `${USERNAME}:${PASSWORD}`;
-  const encodedCredentials = btoa(credentials);
+  const encodedCredentials = encoding.b64encode(credentials);
   
   const response = http.get(authUrl, {
     headers: {
@@ -110,7 +111,7 @@ function dockerPush(imageName) {
   const url = `${HARBOR_URL}/v2/${PROJECT}/${IMAGE}/blobs/uploads/`;
   
   const credentials = `${USERNAME}:${PASSWORD}`;
-  const encodedCredentials = btoa(credentials);
+  const encodedCredentials = encoding.b64encode(credentials);
   
   const headers = {
     'Authorization': `Basic ${encodedCredentials}`,
@@ -142,7 +143,7 @@ function dockerRmi(imageName) {
   const url = `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts/${TAG}`;
   
   const credentials = `${USERNAME}:${PASSWORD}`;
-  const encodedCredentials = btoa(credentials);
+  const encodedCredentials = encoding.b64encode(credentials);
   
   const headers = {
     'Authorization': `Basic ${encodedCredentials}`,
