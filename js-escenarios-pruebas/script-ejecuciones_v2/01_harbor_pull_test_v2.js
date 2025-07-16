@@ -134,8 +134,8 @@ export function handleSummary(data) {
     "Tasa de éxito": `${successRate}%`,
     "Tiempo de respuesta promedio": `${avgResponseTime} ms`,
     "Peticiones por segundo (RPS)": rps,
-    "Uso de CPU (Prometheus)": __ENV.PROMETHEUS_URL ? CPU_QUERY,
-    "Uso de memoria (Prometheus)": __ENV.PROMETHEUS_URL ? MEMORY_QUERY
+    "Uso de CPU (Prometheus)": __ENV.PROMETHEUS_URL ? CPU_QUERY : "No configurado",
+    "Uso de memoria (Prometheus)": __ENV.PROMETHEUS_URL ? MEMORY_QUERY : "No configurado"
   };
 
   // Mostrar resumen en consola con formato
