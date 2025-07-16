@@ -2,6 +2,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import exec from 'k6/execution';
 import { Counter, Trend, Rate } from 'k6/metrics';
+import encoding from 'k6/encoding';
 
 // Variables de entorno
 const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';  
@@ -33,7 +34,7 @@ function generateRandomImage() {
 // Autenticación en Harbor v2.0
 function getAuthToken() {
   const credentials = `${USERNAME}:${PASSWORD}`;
-  const encodedCredentials = btoa(credentials);
+  const encodedCredentials = encoding.b64encode(credentials);
   
   const res = http.get(`${HARBOR_URL}/api/v2.0/users/current`, {
     headers: {
@@ -42,7 +43,7 @@ function getAuthToken() {
   });
   
   if (res.status === 200) {
-    return encodedCredentials; // Usaremos Basic Auth en lugar de token
+    return encodedCredentials; // Usaremos Basic Auth
   }
   
   console.error(`Authentication failed: ${res.status} - ${res.body}`);
@@ -63,7 +64,7 @@ export let options = {
 };
 
 export default function () {
-  // Obtener token de autenticación
+  // Obtener credenciales codificadas
   const authToken = getAuthToken();
   if (!authToken) {
     failedRequests.add(1);
