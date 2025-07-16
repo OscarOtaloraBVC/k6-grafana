@@ -110,13 +110,12 @@ export default function () {
       }
     } else {
       failedRequests.add(1);
-      console.error('Request failed with status:', res.status, 'Response:', res.body);
     }
   } catch (error) {
     failedRequests.add(1);
-    console.error('Request error:', error.message);
   }
 
+  // Actualizar métricas cada 10 iteraciones
   if (exec.scenario.iterationInTest % 10 === 0) {
     fetchPrometheusMetrics();
   }
@@ -129,38 +128,36 @@ export function teardown() {
   fetchPrometheusMetrics();
 }
 
-// Resumen final con manejo seguro de errores
+// Resumen final 
 export function handleSummary(data) {
+  // Asegurarse de tener las métricas más recientes
   fetchPrometheusMetrics();
 
-  // Obtener métricas directamente del escenario
-  const iterations = exec.scenario.iterationInTest || 0;
+  // Función para manejar métricas potencialmente no definidas
+  const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
+    if (!data.metrics || !data.metrics[metric]) return defaultValue;
+    return data.metrics[metric][prop] || defaultValue;
+  };
+
+  // Calcular métricas básicas
   const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
-  
-  // Obtener métricas personalizadas directamente
-  const successes = successfulRequests.values['count'] || 0;
-  const failures = failedRequests.values['count'] || 0;
+  const iterations = safeMetric('iterations');
+  const successes = safeMetric('successful_requests');
+  const failures = safeMetric('failed_requests');
   const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
-  
-  // Obtener tiempos de respuesta
-  const responseData = responseTimes.values || {};
-  const avgResponseTime = responseData.avg ? responseData.avg.toFixed(2) : 0;
+  const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
   const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
+  // Formatear métricas de Prometheus
   const formatPrometheus = (data) => {
     if (!Array.isArray(data) || data.length === 0) return 'No disponible';
     return data.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
 
+  // Crear resumen completo
   const summaryText = `
-============================== RESUMEN FINAL ==============================
+============================== RESUMEN =================================
 Duración:          ${duration} segundos
-Iteraciones:       ${iterations}
-Peticiones exitosas: ${successes}
-Peticiones fallidas: ${failures}
-Tasa de éxito:     ${successRate}%
-Tiempo respuesta:  ${avgResponseTime} ms (avg)
-Peticiones/seg:    ${rps}
 
 Uso de CPU:
 ${formatPrometheus(prometheusData.cpu)}
@@ -172,8 +169,10 @@ ${formatPrometheus(prometheusData.memory)}
 =======================================================================
 `;
 
+  // Mostrar en consola
   console.log(summaryText);
 
+  // También devolver el resumen estándar de k6
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
