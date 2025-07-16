@@ -17,23 +17,17 @@ const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Almacenamiento para métricas
+// Almacenamiento para métricas de Prometheus
 const prometheusData = {
   cpu: [],
   memory: [],
   lastUpdated: null
 };
 
-// Definición de métricas (asegurar que coincidan con las usadas)
-const metrics = {
-  http_reqs: new Counter('http_reqs'),
-  http_req_duration: new Trend('http_req_duration'),
-  http_req_failed: new Rate('http_req_failed'),
-  iterations: new Counter('iterations'),
-  successful_requests: new Counter('successful_requests'),
-  failed_requests: new Counter('failed_requests'),
-  response_times: new Trend('response_times')
-};
+// Métricas personalizadas
+const successfulRequests = new Counter('successful_requests');
+const failedRequests = new Counter('failed_requests');
+const responseTimes = new Trend('response_times');
 
 // Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
@@ -103,12 +97,10 @@ export default function () {
       }
     );
     
-    metrics.response_times.add(Date.now() - start);
-    metrics.http_reqs.add(1);
-    metrics.iterations.add(1);
+    responseTimes.add(Date.now() - start);
     
     if (res.status === 201 || res.status === 202) {
-      metrics.successful_requests.add(1);
+      successfulRequests.add(1);
       if (__ENV.K6_DOCKER_EXEC === 'true') {
         try {
           exec(`docker image rm ${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`, { output: null });
@@ -117,12 +109,10 @@ export default function () {
         }
       }
     } else {
-      metrics.failed_requests.add(1);
-      metrics.http_req_failed.add(1);
+      failedRequests.add(1);
     }
   } catch (error) {
-    metrics.failed_requests.add(1);
-    metrics.http_req_failed.add(1);
+    failedRequests.add(1);
   }
 
   // Actualizar métricas cada 10 iteraciones
@@ -143,28 +133,25 @@ export function handleSummary(data) {
   // Asegurarse de tener las métricas más recientes
   fetchPrometheusMetrics();
 
-  // Función segura para acceder a métricas
-  const safeMetric = (metric, prop = 'count', defaultValue = null) => {
-    try {
-      return data?.metrics?.[metric]?.[prop] ?? defaultValue;
-    } catch (e) {
-      return defaultValue;
-    }
+  // Función para manejar métricas potencialmente no definidas
+  const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
+    if (!data.metrics || !data.metrics[metric]) return defaultValue;
+    return data.metrics[metric][prop] || defaultValue;
   };
 
   // Calcular métricas básicas
-  const duration = data.state?.testRunDurationMs ? (data.state.testRunDurationMs / 1000) : 0;
-  const iterations = safeMetric('iterations', 'count', 0);
-  const successes = safeMetric('successful_requests', 'count', 0);
-  const failures = safeMetric('failed_requests', 'count', 0);
+  const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
+  const iterations = safeMetric('iterations');
+  const successes = safeMetric('successful_requests');
+  const failures = safeMetric('failed_requests');
   const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
-  const avgResponseTime = safeMetric('response_times', 'avg', 0)?.toFixed(2) ?? 'N/A';
+  const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
   const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
   // Formatear métricas de Prometheus
   const formatPrometheus = (data) => {
-    if (!Array.isArray(data) || data.length === 0) return '  No disponible';
-    return data.map(item => `  ${item.container.padEnd(8)}: ${item.usage}`).join('\n');
+    if (!Array.isArray(data) || data.length === 0) return 'No disponible';
+    return data.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
 
   // Crear resumen completo
@@ -191,6 +178,7 @@ ${formatPrometheus(prometheusData.memory)}
   // Mostrar en consola
   console.log(summaryText);
 
+  // También devolver el resumen estándar de k6
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
