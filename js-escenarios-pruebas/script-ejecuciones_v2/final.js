@@ -146,9 +146,9 @@ export function handleSummary(data) {
   const iterations = safeMetric('iterations');
   const successes = safeMetric('successful_requests');
   const failures = safeMetric('failed_requests');
-  const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
-  const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
-  const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
+  //const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
+  //const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
+  //const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
   // Formatear métricas de Prometheus
   const formatPrometheus = (data) => {
@@ -160,12 +160,7 @@ export function handleSummary(data) {
   const summaryText = `
 ============================== RESUMEN =================================
 Duración:          ${durationInMinutes} minutos
-Iteraciones:       ${iterations}
-Subidas exitosas:  ${successes}
-Subidas fallidas:  ${failures}
-Tasa de éxito:     ${successRate}%
-Tiempo respuesta:  ${avgResponseTime} ms (avg)
-Iteraciones/seg:   ${rps}
+
 Uso de CPU:
 ${formatPrometheus(prometheusData.cpu)}
 
@@ -176,12 +171,36 @@ Ejecucion: ${prometheusData.lastUpdated || 'N/A'}
 =======================================================================
 `;
 
-  // Mostrar en consola
-  console.log(summaryText);
+//  // Mostrar en consola
+//  console.log(summaryText);
+//
+//  // También devolver el resumen estándar de k6
+//  return {
+//    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+//    "summary.txt": summaryText
+//  };
 
-  // También devolver el resumen estándar de k6
+// Preparar datos para el resumen estándar
+  const metricsData = {
+    metrics: {
+      total_iterations: { value: iterations },
+      successful_uploads: { value: successes },
+      failed_uploads: { value: failures },
+      upload_times: { 
+        avg: avgUploadTime,
+        min: uploadTimes.min || 0,
+        max: uploadTimes.max || 0,
+        med: uploadTimes.med || 0,
+        p90: uploadTimes.p(90) || 0,
+        p95: uploadTimes.p(95) || 0
+      }
+    }
+  };
+
   return {
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    stdout: textSummary(metricsData, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
   };
+
+
 }
