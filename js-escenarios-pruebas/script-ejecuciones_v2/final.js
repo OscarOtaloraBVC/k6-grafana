@@ -1,0 +1,198 @@
+import http from 'k6/http';
+import { sleep } from 'k6';
+import exec from 'k6/execution';
+import { Counter, Trend, Rate } from 'k6/metrics';
+import encoding from 'k6/encoding';
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
+
+// Configuración
+const HARBOR_URL = (__ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org').replace(/\/$/, '');
+const USERNAME = __ENV.HARBOR_USER || 'admin';
+const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
+const PROJECT = __ENV.HARBOR_PROJECT || 'test-devops';
+const IMAGE = __ENV.HARBOR_IMAGE || 'ubuntu';
+const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
+
+// Consultas Prometheus
+const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
+const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
+
+// Almacenamiento para métricas
+const prometheusData = {
+  cpu: [],
+  memory: [],
+  lastUpdated: null
+};
+
+// Definición de métricas (asegurar que coincidan con las usadas)
+const metrics = {
+  http_reqs: new Counter('http_reqs'),
+  http_req_duration: new Trend('http_req_duration'),
+  http_req_failed: new Rate('http_req_failed'),
+  iterations: new Counter('iterations'),
+  successful_requests: new Counter('successful_requests'),
+  failed_requests: new Counter('failed_requests'),
+  response_times: new Trend('response_times')
+};
+
+// Función para obtener métricas de Prometheus
+function fetchPrometheusMetrics() {
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
+
+  try {
+    // Obtener CPU
+    const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
+    if (cpuRes.status === 200) {
+      const data = cpuRes.json();
+      if (data.status === "success") {
+        prometheusData.cpu = data.data.result.map(r => ({
+          container: r.metric.container,
+          usage: `${parseFloat(r.value[1]).toFixed(2)}%`
+        }));
+      }
+    }
+
+    // Obtener Memoria
+    const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
+    if (memRes.status === 200) {
+      const data = memRes.json();
+      if (data.status === "success") {
+        prometheusData.memory = data.data.result.map(r => ({
+          container: r.metric.container,
+          usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
+        }));
+      }
+    }
+    
+    prometheusData.lastUpdated = new Date().toISOString();
+  } catch (error) {
+    console.error('Error obteniendo métricas de Prometheus:', error);
+  }
+}
+
+// Configuración de la prueba
+export const options = {
+  stages: [
+    { duration: '30s', target: 5 },
+    { duration: '2m', target: 10 },
+    { duration: '30s', target: 5 }
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<5000'],
+    http_req_failed: ['rate<0.1']
+  },
+  teardownTimeout: '60s'
+};
+
+// Función principal
+export default function () {
+  const authToken = encoding.b64encode(`${USERNAME}:${PASSWORD}`);
+  const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  
+  try {
+    const start = Date.now();
+    const res = http.post(
+      `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts`,
+      new Uint8Array(30 * 1024 * 1024),
+      {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Authorization': `Basic ${authToken}`
+        },
+        timeout: '120s'
+      }
+    );
+    
+    metrics.response_times.add(Date.now() - start);
+    metrics.http_reqs.add(1);
+    metrics.iterations.add(1);
+    
+    if (res.status === 201 || res.status === 202) {
+      metrics.successful_requests.add(1);
+      if (__ENV.K6_DOCKER_EXEC === 'true') {
+        try {
+          exec(`docker image rm ${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`, { output: null });
+        } catch (error) {
+          console.error('Error eliminando imagen:', error);
+        }
+      }
+    } else {
+      metrics.failed_requests.add(1);
+      metrics.http_req_failed.add(1);
+    }
+  } catch (error) {
+    metrics.failed_requests.add(1);
+    metrics.http_req_failed.add(1);
+  }
+
+  // Actualizar métricas cada 10 iteraciones
+  if (exec.scenario.iterationInTest % 10 === 0) {
+    fetchPrometheusMetrics();
+  }
+
+  sleep(1);
+}
+
+// Teardown - Obtener métricas finales
+export function teardown() {
+  fetchPrometheusMetrics();
+}
+
+// Resumen final con manejo seguro de errores
+export function handleSummary(data) {
+  // Asegurarse de tener las métricas más recientes
+  fetchPrometheusMetrics();
+
+  // Función segura para acceder a métricas
+  const safeMetric = (metric, prop = 'count', defaultValue = null) => {
+    try {
+      return data?.metrics?.[metric]?.[prop] ?? defaultValue;
+    } catch (e) {
+      return defaultValue;
+    }
+  };
+
+  // Calcular métricas básicas
+  const duration = data.state?.testRunDurationMs ? (data.state.testRunDurationMs / 1000) : 0;
+  const iterations = safeMetric('iterations', 'count', 0);
+  const successes = safeMetric('successful_requests', 'count', 0);
+  const failures = safeMetric('failed_requests', 'count', 0);
+  const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
+  const avgResponseTime = safeMetric('response_times', 'avg', 0)?.toFixed(2) ?? 'N/A';
+  const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
+
+  // Formatear métricas de Prometheus
+  const formatPrometheus = (data) => {
+    if (!Array.isArray(data) || data.length === 0) return '  No disponible';
+    return data.map(item => `  ${item.container.padEnd(8)}: ${item.usage}`).join('\n');
+  };
+
+  // Crear resumen completo
+  const summaryText = `
+============================== RESUMEN FINAL ==============================
+Duración:          ${duration} segundos
+Iteraciones:       ${iterations}
+Peticiones exitosas: ${successes}
+Peticiones fallidas: ${failures}
+Tasa de éxito:     ${successRate}%
+Tiempo respuesta:  ${avgResponseTime} ms (avg)
+Peticiones/seg:    ${rps}
+
+Uso de CPU:
+${formatPrometheus(prometheusData.cpu)}
+
+Uso de Memoria:
+${formatPrometheus(prometheusData.memory)}
+
+Última actualización: ${prometheusData.lastUpdated || 'N/A'}
+=======================================================================
+`;
+
+  // Mostrar en consola
+  console.log(summaryText);
+
+  return {
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    "summary.txt": summaryText
+  };
+}
