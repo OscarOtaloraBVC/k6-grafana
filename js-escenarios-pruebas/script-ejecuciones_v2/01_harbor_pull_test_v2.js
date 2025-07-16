@@ -53,7 +53,7 @@ function getAuthToken() {
 // Configuración
 export let options = {
   stages: [
-    { duration: '1m', target: 10 },
+    { duration: '5m', target: 5 },
     //{ duration: '5m', target: 50 },  
     //{ duration: '30s', target: 0 },   
   ],
