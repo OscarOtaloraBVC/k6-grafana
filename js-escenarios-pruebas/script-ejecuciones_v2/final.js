@@ -83,9 +83,6 @@ export default function () {
   const authToken = encoding.b64encode(`${USERNAME}:${PASSWORD}`);
   const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   
-  // Incrementar el contador de iteraciones manualmente si es necesario
-  exec.scenario.iterationInTest += 1;
-  
   try {
     const start = Date.now();
     const res = http.post(
@@ -136,11 +133,11 @@ export function teardown() {
 export function handleSummary(data) {
   fetchPrometheusMetrics();
 
-  // Obtener métricas directamente del escenario si no están en data.metrics
+  // Obtener métricas directamente del escenario
   const iterations = exec.scenario.iterationInTest || 0;
   const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
   
-  // Obtener métricas personalizadas directamente si es necesario
+  // Obtener métricas personalizadas directamente
   const successes = successfulRequests.values['count'] || 0;
   const failures = failedRequests.values['count'] || 0;
   const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
