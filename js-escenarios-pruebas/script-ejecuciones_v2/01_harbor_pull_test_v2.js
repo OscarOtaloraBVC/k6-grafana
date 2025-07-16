@@ -5,67 +5,66 @@ import { Counter, Trend, Rate } from 'k6/metrics';
 import encoding from 'k6/encoding';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
 
-// Configuración de Harbor
+// Configuración
 const HARBOR_URL = (__ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org').replace(/\/$/, '');
 const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
 const PROJECT = __ENV.HARBOR_PROJECT || 'test-devops';
 const IMAGE = __ENV.HARBOR_IMAGE || 'ubuntu';
-
-// Configuración de Prometheus
 const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
+
+// Consultas Prometheus
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Métricas personalizadas
+// Métricas
 const successfulRequests = new Counter('successful_requests');
 const failedRequests = new Counter('failed_requests');
-const requestRate = new Rate('request_rate');
 const responseTimes = new Trend('response_times');
-let prometheusCpuMetrics = 'No recopilado';
-let prometheusMemoryMetrics = 'No recopilado';
+let prometheusData = {
+  cpu: 'No recopilado',
+  memory: 'No recopilado'
+};
 
-// Generador de imágenes aleatorias
-function generateRandomImage() {
-  const minSize = 28 * 1024 * 1024; // 28MB
-  const maxSize = 50 * 1024 * 1024; // 50MB
-  const size = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
-  return new Uint8Array(size).map(() => Math.floor(Math.random() * 256));
-}
-
-// Autenticación en Harbor
-function getAuthToken() {
-  const credentials = `${USERNAME}:${PASSWORD}`;
-  return encoding.b64encode(credentials);
-}
-
-// Obtener métricas de Prometheus
-async function fetchPrometheusMetrics() {
+// Función para obtener métricas de Prometheus
+async function getPrometheusMetrics() {
   if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
 
   try {
-    // Obtener métricas de CPU
+    // Obtener CPU
     const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
     if (cpuRes.status === 200) {
-      prometheusCpuMetrics = JSON.stringify(cpuRes.json().data.result, null, 2);
+      const data = cpuRes.json();
+      if (data.status === "success") {
+        prometheusData.cpu = data.data.result.map(r => ({
+          container: r.metric.container,
+          cpu_usage: `${parseFloat(r.value[1]).toFixed(2)}%`
+        }));
+      }
     }
 
-    // Obtener métricas de memoria
+    // Obtener Memoria
     const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
     if (memRes.status === 200) {
-      prometheusMemoryMetrics = JSON.stringify(memRes.json().data.result, null, 2);
+      const data = memRes.json();
+      if (data.status === "success") {
+        prometheusData.memory = data.data.result.map(r => ({
+          container: r.metric.container,
+          memory_usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
+        }));
+      }
     }
   } catch (error) {
-    console.error('Error fetching Prometheus metrics:', error);
+    console.error('Error obteniendo métricas de Prometheus:', error);
   }
 }
 
 // Configuración de la prueba
 export const options = {
   stages: [
-    { duration: '30s', target: 5 },  // Rampa inicial
-    { duration: '2m', target: 10 },  // Carga media
-    { duration: '30s', target: 5 },  // Rampa de salida
+    { duration: '30s', target: 5 },
+    { duration: '2m', target: 10 },
+    { duration: '30s', target: 5 }
   ],
   thresholds: {
     http_req_duration: ['p(95)<5000'],
@@ -74,18 +73,16 @@ export const options = {
   teardownTimeout: '30s'
 };
 
-// Función principal de la prueba
+// Función principal
 export default async function () {
-  const authToken = getAuthToken();
+  const authToken = encoding.b64encode(`${USERNAME}:${PASSWORD}`);
   const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const imageName = `${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`;
-
-  // Subir imagen
-  const startTime = Date.now();
+  
   try {
-    const uploadRes = http.post(
+    const start = Date.now();
+    const res = http.post(
       `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts`,
-      generateRandomImage(),
+      new Uint8Array(30 * 1024 * 1024), // 30MB
       {
         headers: {
           'Content-Type': 'application/octet-stream',
@@ -94,54 +91,40 @@ export default async function () {
         timeout: '120s'
       }
     );
-
-    const duration = Date.now() - startTime;
-    responseTimes.add(duration);
-    requestRate.add(1);
-
-    if (uploadRes.status === 201 || uploadRes.status === 202) {
+    
+    responseTimes.add(Date.now() - start);
+    
+    if (res.status === 201 || res.status === 202) {
       successfulRequests.add(1);
-      
-      // Eliminar imagen si está habilitado
       if (__ENV.K6_DOCKER_EXEC === 'true') {
         try {
-          const cmd = `docker image rm ${imageName}`;
-          exec(cmd, { output: null });
-          console.log(`Deleted image: ${imageName}`);
+          exec(`docker image rm ${HARBOR_URL.split('://')[1]}/${PROJECT}/${IMAGE}:${randomTag}`, { output: null });
         } catch (error) {
-          console.error(`Error deleting image: ${error}`);
+          console.error('Error eliminando imagen:', error);
         }
       }
     } else {
       failedRequests.add(1);
-      console.error(`Upload failed (${uploadRes.status}): ${uploadRes.body}`);
     }
   } catch (error) {
     failedRequests.add(1);
-    console.error('Request failed:', error);
-  }
-
-  // Actualizar métricas de Prometheus periódicamente
-  if (exec.scenario.iterationInTest % 10 === 0) {
-    await fetchPrometheusMetrics();
   }
 
   sleep(1);
 }
 
-// Teardown - Obtener métricas finales de Prometheus
+// Teardown - Obtener métricas finales
 export function teardown() {
-  fetchPrometheusMetrics();
+  getPrometheusMetrics();
 }
 
-// Generar resumen final con manejo seguro de métricas
+// Resumen final con manejo seguro de errores
 export function handleSummary(data) {
   // Función segura para obtener métricas
-  const safeMetric = (metricName, property = 'count', defaultValue = 0) => {
-    return data.metrics[metricName] ? data.metrics[metricName][property] : defaultValue;
-  };
+  const safeMetric = (metric, prop = 'count', def = 0) => 
+    data.metrics[metric] ? data.metrics[metric][prop] || def : def;
 
-  // Calcular métricas básicas con valores por defecto
+  // Calcular métricas básicas
   const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
   const iterations = safeMetric('iterations');
   const successes = safeMetric('successful_requests');
@@ -150,32 +133,36 @@ export function handleSummary(data) {
   const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
   const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
-  // Crear resumen detallado
-  const summary = {
-    "Duración de la prueba": `${duration} segundos`,
-    "Total de iteraciones": iterations,
-    "Peticiones exitosas": successes,
-    "Peticiones fallidas": failures,
-    "Tasa de éxito": `${successRate}%`,
-    "Tiempo de respuesta promedio": `${avgResponseTime} ms`,
-    "Peticiones por segundo (RPS)": rps,
-    "Uso de CPU (Prometheus)": prometheusCpuMetrics,
-    "Uso de memoria (Prometheus)": prometheusMemoryMetrics
+  // Formatear métricas de Prometheus
+  const formatPrometheusData = (data) => {
+    if (typeof data === 'string') return data;
+    return data.map(d => `${d.container}: ${d.cpu_usage || d.memory_usage}`).join('\n');
   };
 
-  // Mostrar resumen en consola
+  // Crear resumen
+  const summary = {
+    "Duración": `${duration}s`,
+    "Iteraciones": iterations,
+    "Éxitos": successes,
+    "Fallos": failures,
+    "Tasa éxito": `${successRate}%`,
+    "Tiempo respuesta (avg)": `${avgResponseTime}ms`,
+    "RPS": rps,
+    "Uso de CPU": formatPrometheusData(prometheusData.cpu),
+    "Uso de Memoria": formatPrometheusData(prometheusData.memory)
+  };
+
+  // Mostrar en consola
   console.log("\n" + "=".repeat(60));
-  console.log("RESUMEN FINAL DE LA PRUEBA");
+  console.log("RESUMEN FINAL");
   console.log("=".repeat(60));
-  
   for (const [key, value] of Object.entries(summary)) {
-    console.log(`• ${key.padEnd(30)}: ${value}`);
+    console.log(`${key.padEnd(20)}: ${value}`);
   }
-  
-  console.log("=".repeat(60) + "\n");
+  console.log("=".repeat(60));
 
   return {
-    "stdout": textSummary(data, { indent: " ", enableColors: true }),
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.json": JSON.stringify(summary, null, 2)
   };
 }
