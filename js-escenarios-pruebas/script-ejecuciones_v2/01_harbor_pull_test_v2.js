@@ -1,153 +1,167 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { Harbor } from 'k6/x/harbor';
 import exec from 'k6/execution';
+import { Counter, Trend, Rate } from 'k6/metrics';
 
 // Variables de entorno
-const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';
+const PROMETHEUS_URL = __ENV.PROMETHEUS_URL || 'http://localhost:9090';  
 const HARBOR_URL = (__ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org').replace(/\/$/, '');
 const USERNAME = __ENV.HARBOR_USER || 'admin';
 const PASSWORD = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
 const PROJECT = __ENV.HARBOR_PROJECT || 'test-devops';
 const IMAGE = __ENV.HARBOR_IMAGE || 'ubuntu';
 const TAG = __ENV.HARBOR_TAG || 'xk6-1749486052417';
-const TEST_DURATION = __ENV.TEST_DURATION || '5m';
 
-// Consultas Prometheus
+// Consultas Prometheus específicas
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Configuración de la prueba
-export const options = {
-  scenarios: {
-    harbor_load: {
-      executor: 'constant-arrival-rate',
-      rate: 20, // 20 iteraciones por segundo
-      timeUnit: '1s',
-      duration: TEST_DURATION,
-      preAllocatedVUs: 10,
-      maxVUs: 50,
-    },
-  },
-  thresholds: {
-    http_req_duration: ['p(95)<500'], // 95% de las solicitudes deben ser menores a 500ms
-    http_req_failed: ['rate<0.01'], // Menos del 1% de errores
-  },
-};
+// Métricas personalizadas
+let successfulRequests = new Counter('successful_requests');
+let failedRequests = new Counter('failed_requests');
+let requestRate = new Rate('request_rate');
+let responseTimes = new Trend('response_times');
 
-// Función para autenticación en Harbor
-function harborAuthenticate() {
-  const url = `${HARBOR_URL}/c/login`;
-  const payload = JSON.stringify({
-    principal: USERNAME,
-    password: PASSWORD
-  });
+// Generador de imágenes aleatorias
+function generateRandomImage() {
+  const minSize = 28 * 1024 * 1024; // 28MB en bytes
+  const maxSize = 50 * 1024 * 1024; // 50MB en bytes
+  const size = Math.floor(Math.random() * (maxSize - minSize + 1)) + minSize;
   
-  const params = {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  };
-  
-  return http.post(url, payload, params);
-}
-
-// Función para pull de imagen
-function harborPullImage(project, image, tag) {
-  const url = `${HARBOR_URL}/v2/${project}/${image}/manifests/${tag}`;
-  const params = {
-    headers: {
-      'Accept': 'application/vnd.docker.distribution.manifest.v2+json',
-    },
-    auth: 'basic',
-  };
-  
-  return http.get(url, params);
+  // Generar datos binarios aleatorios
+  return new Array(size).fill(0).map(() => Math.floor(Math.random() * 256));
 }
 
 // Función para obtener métricas de Prometheus
-function getPrometheusMetrics(query) {
+async function getPrometheusMetrics(query) {
   const url = `${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(query)}`;
   const res = http.get(url);
   
   if (res.status === 200) {
-    try {
-      return JSON.parse(res.body).data.result;
-    } catch (e) {
-      console.error('Error parsing Prometheus response:', e);
-      return null;
-    }
-  } else {
-    console.error('Error fetching Prometheus metrics:', res.status, res.body);
-    return null;
+    return JSON.parse(res.body).data.result;
   }
+  return null;
 }
 
-// Función para eliminar imagen Docker local
-function deleteLocalImage() {
-  const imageRef = `${HARBOR_URL}/${PROJECT}/${IMAGE}:${TAG}`;
+// Configuración
+export let options = {
+  stages: [
+    { duration: '1s', target: 50 },
+    { duration: '5m', target: 50 }, // 5 minutos de prueba
+    { duration: '1s', target: 0 },
+  ],
+  noConnectionReuse: true,
+  thresholds: {
+    http_req_duration: ['p(95)<3500'],
+    http_req_failed: [
+      { threshold: 'rate<0.1', abortOnFail: true },
+      { threshold: 'rate<0.5', abortOnFail: true, delayAbortEval: '10s' }
+    ],
+  },
+};
+
+// Función para eliminar imágenes Docker
+function deleteDockerImage(imageName) {
   try {
-    // Esto es un ejemplo, en k6 puro no podemos ejecutar comandos shell directamente
-    // En una implementación real necesitarías usar k6/execution o un módulo externo
-    console.log(`[SIMULACIÓN] Eliminando imagen local: docker image rm ${imageRef}`);
-    return true;
+    const cmd = `docker image rm ${imageName}`;
+    const result = exec(cmd);
+    console.log(`Deleted image: ${imageName} - ${result}`);
   } catch (error) {
-    console.error('Error eliminando imagen local:', error);
-    return false;
+    console.error(`Error deleting image ${imageName}: ${error}`);
   }
 }
 
-// Función principal de la prueba
-export default function () {
-  // Paso 1: Autenticación en Harbor
-  const authRes = harborAuthenticate();
-  check(authRes, {
-    'Autenticación exitosa': (r) => r.status === 200,
+export default async function () {
+  // Autenticación en Harbor
+  const authRes = http.post(`${HARBOR_URL}/c/login`, {
+    principal: USERNAME,
+    password: PASSWORD
   });
-
-  // Paso 2: Pull de la imagen
-  const pullRes = harborPullImage(PROJECT, IMAGE, TAG);
-  check(pullRes, {
-    'Pull de imagen exitoso': (r) => r.status === 200,
-  });
-
-  // Paso 3: Eliminar imagen local (simulando ciclo de vida)
-  if (__ITER % 10 === 0) { // Cada 10 iteraciones
-    deleteLocalImage();
+  
+  if (!authRes.cookies['sid']) {
+    failedRequests.add(1);
+    return;
   }
-
-  // Pequeña pausa entre operaciones
-  sleep(0.1);
+  
+  const cookies = {
+    sid: authRes.cookies['sid'][0].value
+  };
+  
+  // Generar y subir imagen
+  const randomImage = generateRandomImage();
+  const randomTag = `test-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const imageName = `${PROJECT}/${IMAGE}:${randomTag}`;
+  
+  const startTime = new Date().getTime();
+  const uploadRes = http.post(
+    `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts`,
+    { file: randomImage },
+    {
+      headers: {
+        'Content-Type': 'application/octet-stream',
+      },
+      cookies: cookies
+    }
+  );
+  
+  const endTime = new Date().getTime();
+  const duration = endTime - startTime;
+  
+  responseTimes.add(duration);
+  requestRate.add(1);
+  
+  if (uploadRes.status === 201) {
+    successfulRequests.add(1);
+    
+    // Eliminar la imagen después de subirla
+    deleteDockerImage(imageName);
+  } else {
+    failedRequests.add(1);
+    console.error(`Failed to upload image: ${uploadRes.status} - ${uploadRes.body}`);
+  }
+  
+  // Obtener métricas de Prometheus periódicamente
+  if (exec.scenario.iterationInTest % 10 === 0) {
+    const cpuMetrics = await getPrometheusMetrics(CPU_QUERY);
+    const memoryMetrics = await getPrometheusMetrics(MEMORY_QUERY);
+    
+    console.log('--- Métricas de Harbor ---');
+    console.log('CPU Usage (%):', JSON.stringify(cpuMetrics, null, 2));
+    console.log('Memory Usage (MB):', JSON.stringify(memoryMetrics, null, 2));
+  }
+  
+  sleep(1);
 }
 
-// Función de manejo de resumen
 export function handleSummary(data) {
+  // Resumen de métricas
+  const metrics = {
+    'Tiempo de prueba': `${data.state.testRunDurationMs / 1000} segundos`,
+    'Iteraciones totales': data.metrics.iterations.count,
+    'Peticiones exitosas': data.metrics['successful_requests'].count,
+    'Peticiones fallidas': data.metrics['failed_requests'].count,
+    'Tasa de éxito': `${(data.metrics['successful_requests'].count / data.metrics.iterations.count * 100).toFixed(2)}%`,
+    'Tiempo de respuesta promedio (ms)': data.metrics['response_times'].avg.toFixed(2),
+    'Peticiones por segundo': (data.metrics.iterations.count / (data.state.testRunDurationMs / 1000)).toFixed(2),
+  };
+  
   // Obtener métricas finales de Prometheus
   const cpuMetrics = getPrometheusMetrics(CPU_QUERY);
   const memoryMetrics = getPrometheusMetrics(MEMORY_QUERY);
   
-  console.log('\n--- Métricas de Harbor ---');
-  if (cpuMetrics) {
-    console.log('Uso de CPU (%):', JSON.stringify(cpuMetrics, null, 2));
+  if (cpuMetrics && memoryMetrics) {
+    metrics['CPU Usage Harbor (%)'] = JSON.stringify(cpuMetrics, null, 2);
+    metrics['Memory Usage Harbor (MB)'] = JSON.stringify(memoryMetrics, null, 2);
   }
-  if (memoryMetrics) {
-    console.log('Uso de Memoria (MB):', JSON.stringify(memoryMetrics, null, 2));
+  
+  // Imprimir resumen en consola
+  console.log('\n===== RESUMEN DE LA PRUEBA =====');
+  for (const [key, value] of Object.entries(metrics)) {
+    console.log(`${key}: ${value}`);
   }
-
-  // Resumen estándar de K6
-  const summary = {
-    duration: data.metrics.http_req_duration.values.avg.toFixed(2) + 'ms',
-    requests_per_second: (data.metrics.http_reqs.values.rate || 0).toFixed(2),
-    failed_requests: (data.metrics.http_req_failed.values.passes || 0),
-    checks: data.root_group.checks,
-  };
-
-  console.log('\n--- Resumen de la Prueba ---');
-  console.log(`- Duración promedio de solicitudes: ${summary.duration}`);
-  console.log(`- Peticiones por segundo: ${summary.requests_per_second}`);
-  console.log(`- Solicitudes fallidas: ${summary.failed_requests}`);
-  console.log('- Checks:', summary.checks);
-
+  
   return {
-    'stdout': 'Resumen de prueba impreso en consola',
+    'stdout': 'Resumen impreso en consola',
   };
 }
