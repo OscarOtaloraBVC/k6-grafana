@@ -69,7 +69,7 @@ export const options = {
   stages: [
     { duration: '1m', target: 10 },
     { duration: '2m', target: 15 },
-    { duration: '2m', target: 12 }
+    { duration: '2m', target: 25 }
   ],
   thresholds: {
     http_req_duration: ['p(95)<5000'],
