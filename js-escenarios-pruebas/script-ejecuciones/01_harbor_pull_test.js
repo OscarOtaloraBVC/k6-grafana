@@ -25,7 +25,7 @@ export let options = {
     //{ duration: '2m', target: 15 },
     { duration: '1s', target: 10 },
     //{ duration: '2m', target: 10 },
-    //{ duration: '1m', target: 0 },
+    { duration: '1m', target: 0 },
   ],
   noConnectionReuse: true,
   thresholds: {

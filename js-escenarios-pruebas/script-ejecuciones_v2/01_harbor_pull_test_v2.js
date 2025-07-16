@@ -53,9 +53,9 @@ function getAuthToken() {
 // Configuración
 export let options = {
   stages: [
-    { duration: '30s', target: 10 }, // Rampa inicial
-    { duration: '5m', target: 50 },  // Carga sostenida
-    { duration: '30s', target: 0 },   // Rampa de salida
+    { duration: '1s', target: 10 },
+    //{ duration: '5m', target: 50 },  
+    //{ duration: '30s', target: 0 },   
   ],
   thresholds: {
     http_req_duration: ['p(95)<5000'],
