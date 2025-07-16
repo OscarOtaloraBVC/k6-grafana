@@ -67,9 +67,10 @@ function fetchPrometheusMetrics() {
 // Configuración de la prueba
 export const options = {
   stages: [
-    { duration: '1m', target: 10 },
-    { duration: '2m', target: 15 },
-    { duration: '2m', target: 25 }
+    { duration: '1m15s', target: 50 },
+    { duration: '1m15s', target: 25 },
+    { duration: '1m15s', target: 15 },
+    { duration: '1m15s', target: 10 }
   ],
   thresholds: {
     http_req_duration: ['p(95)<5000'],
@@ -166,7 +167,7 @@ ${formatPrometheus(prometheusData.cpu)}
 Uso de Memoria:
 ${formatPrometheus(prometheusData.memory)}
 
-Última actualización: ${prometheusData.lastUpdated || 'N/A'}
+Ejecucion: ${prometheusData.lastUpdated || 'N/A'}
 =======================================================================
 `;
 
