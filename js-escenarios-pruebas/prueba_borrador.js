@@ -126,8 +126,19 @@ export function teardown() {
 
 // Resumen final 
 export function handleSummary(data) {
+  // Debug: Verificar qué contiene data
+  console.log('Data object keys:', Object.keys(data || {}));
+  
   // Asegurarse de tener las métricas más recientes
   fetchPrometheusMetrics();
+
+  // Validar que data existe y tiene estructura mínima
+  if (!data || typeof data !== 'object') {
+    console.error('Data object is invalid or missing');
+    return {
+      "summary.txt": "Error: No se pudo generar el resumen - datos inválidos"
+    };
+  }
 
   // Función para manejar métricas potencialmente no definidas
   const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
@@ -147,16 +158,26 @@ export function handleSummary(data) {
   
   const durationInMinutes = (duration / 60).toFixed(2);
   
+  // Obtener información adicional de métricas
+  const iterations = safeMetric('iterations', 'count', 0);
+  const httpReqs = safeMetric('http_reqs', 'count', 0);
+  const httpReqFailed = safeMetric('http_req_failed', 'rate', 0);
+  const avgIterationDuration = safeMetric('iteration_duration', 'avg', 0);
+  
   // Formatear métricas de Prometheus
   const formatPrometheus = (data) => {
     if (!Array.isArray(data) || data.length === 0) return 'No disponible';
     return data.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
 
-  // Resumen
+  // Resumen expandido
   const summaryText = `
 ============================== RESUMEN =================================
 Duración:          ${durationInMinutes} minutos
+Iteraciones:       ${iterations}
+HTTP Requests:     ${httpReqs}
+HTTP Failed Rate:  ${(httpReqFailed * 100).toFixed(2)}%
+Avg Iteration:     ${(avgIterationDuration / 1000).toFixed(2)}s
 
 Uso de CPU Harbor:
 ${formatPrometheus(prometheusData.cpu)}
@@ -175,11 +196,18 @@ ${formatPrometheus(prometheusData.memory)}
     "summary.txt": summaryText
   };
   
+  // Intentar generar textSummary con más validaciones
   try {
-    result.stdout = textSummary(data, { indent: ' ', enableColors: true });
+    if (data && data.metrics && Object.keys(data.metrics).length > 0) {
+      result.stdout = textSummary(data, { indent: ' ', enableColors: true });
+    } else {
+      console.log('No hay métricas disponibles para textSummary');
+      result.stdout = summaryText; // Usar nuestro resumen personalizado
+    }
   } catch (error) {
-    console.error('Error generando textSummary:', error);
-    result.stdout = 'Error generando resumen detallado';
+    console.error('Error generando textSummary:', JSON.stringify(error));
+    console.error('Data structure:', JSON.stringify(data, null, 2));
+    result.stdout = summaryText; // Usar nuestro resumen personalizado como fallback
   }
   
   return result;
