@@ -89,7 +89,7 @@ export default function () {
     const start = Date.now();
     const res = http.post(
       `${HARBOR_URL}/api/v2.0/projects/${PROJECT}/repositories/${IMAGE}/artifacts`,
-      new Uint8Array(30 * 1024 * 1024),
+      new Uint8Array(30 * 1024 * 1024), // 30 MB de datos aleatorios new Uint8Array(30 * 1024 * 1024)
       {
         headers: {
           'Content-Type': 'application/octet-stream',
@@ -156,10 +156,10 @@ export function handleSummary(data) {
 ============================== RESUMEN =================================
 Duración:          ${durationInMinutes} minutos
 
-Uso de CPU:
+Uso de CPU Harbor:
 ${formatPrometheus(prometheusData.cpu)}
 
-Uso de Memoria:
+Uso de Memoria Harbor:
 ${formatPrometheus(prometheusData.memory)}
 
 =======================================================================
