@@ -7,14 +7,61 @@ const HARBOR_URL = 'test-nuam-registry.coffeesoft.org';
 const PROJECT_NAME = 'library';
 const IMAGE_NAME = 'ubuntu';
 const image_tag_prefix = 'latest';
+const PROMETHEUS_URL = 'http://localhost:9090';
  
 const HARBOR_USER = 'admin';
 const HARBOR_PASSWORD = 'r7Y5mQBwsM2lIj0';
- 
+
+// Consultas Prometheus
+const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
+const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
+
+// Almacenamiento para métricas de Prometheus
+const prometheusData = {
+  cpu: [],
+  memory: [],
+  lastUpdated: null
+};
+
+// Función para obtener métricas de Prometheus
+function fetchPrometheusMetrics() {
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
+
+  try {
+    // Consulta CPU
+    const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
+    if (cpuRes.status === 200) {
+      const data = cpuRes.json();
+      if (data.status === "success") {
+        prometheusData.cpu = data.data.result.map(r => ({
+          container: r.metric.container,
+          usage: `${parseFloat(r.value[1]).toFixed(2)}%`
+        }));
+      }
+    }
+
+    // Consulta Memoria
+    const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
+    if (memRes.status === 200) {
+      const data = memRes.json();
+      if (data.status === "success") {
+        prometheusData.memory = data.data.result.map(r => ({
+          container: r.metric.container,
+          usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
+        }));
+      }
+    }
+    
+    prometheusData.lastUpdated = new Date().toISOString();
+  } catch (error) {
+    console.error('Error obteniendo métricas de Prometheus:', error);
+  }
+}
+
+// Configuración iteraciones de la prueba
 export const options = {
   stages: [
-    { duration: '2m', target: 10 }
-    // Puedes descomentar y agregar más etapas según necesites:
+    { duration: '2m', target: 10 }   
     //{ duration: '1m15s', target: 50 },
     //{ duration: '1m15s', target: 25 },
     //{ duration: '1m15s', target: 15 },
@@ -69,4 +116,52 @@ export default function () {
     }
  
     sleep(5); // Simula tiempo de procesamiento
+}
+
+// Teardown - Obtener métricas finales
+export function teardown() {
+  fetchPrometheusMetrics();
+}
+
+// Resumen final 
+export function handleSummary(data) {
+  // Asegurarse de tener las métricas más recientes
+  fetchPrometheusMetrics();
+
+  // Función para manejar métricas potencialmente no definidas
+  const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
+    if (!data.metrics || !data.metrics[metric]) return defaultValue;
+    return data.metrics[metric][prop] || defaultValue;
+  };
+
+  // Calcular métricas básicas
+  const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
+  const durationInMinutes = (duration / 60).toFixed(2);
+  
+  // Formatear métricas de Prometheus
+  const formatPrometheus = (data) => {
+    if (!Array.isArray(data) || data.length === 0) return 'No disponible';
+    return data.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
+  };
+
+  // Resumen
+  const summaryText = `
+============================== RESUMEN =================================
+Duración:          ${durationInMinutes} minutos
+
+Uso de CPU Harbor:
+${formatPrometheus(prometheusData.cpu)}
+
+Uso de Memoria Harbor:
+${formatPrometheus(prometheusData.memory)}
+
+=======================================================================
+`;
+
+  // Mostrar en consola
+  console.log(summaryText);
+  return {
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    "summary.txt": summaryText
+  };
 }
