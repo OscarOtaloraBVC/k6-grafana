@@ -121,7 +121,7 @@ export default function () {
     fetchPrometheusMetrics();
   }
 
-  sleep(1);
+  //sleep(1);
 }
 
 // Teardown - Obtener métricas finales
