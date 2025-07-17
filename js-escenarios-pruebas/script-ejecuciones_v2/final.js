@@ -146,9 +146,9 @@ export function handleSummary(data) {
   const iterations = safeMetric('iterations');
   const successes = safeMetric('successful_requests');
   const failures = safeMetric('failed_requests');
-  //const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
-  //const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
-  //const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
+  const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
+  const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
+  const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
 
   // Formatear métricas de Prometheus
   const formatPrometheus = (data) => {
