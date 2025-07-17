@@ -34,7 +34,7 @@ function fetchPrometheusMetrics() {
   if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
 
   try {
-    // Obtener CPU
+    // Consulta CPU
     const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
     if (cpuRes.status === 200) {
       const data = cpuRes.json();
@@ -46,7 +46,7 @@ function fetchPrometheusMetrics() {
       }
     }
 
-    // Obtener Memoria
+    // Consulta Memoria
     const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
     if (memRes.status === 200) {
       const data = memRes.json();
@@ -67,10 +67,11 @@ function fetchPrometheusMetrics() {
 // Configuración de la prueba
 export const options = {
   stages: [
-    { duration: '1m15s', target: 50 },
-    { duration: '1m15s', target: 25 },
-    { duration: '1m15s', target: 15 },
-    { duration: '1m15s', target: 10 }
+    { duration: '5m', target: 10 }
+    //{ duration: '1m15s', target: 50 },
+    //{ duration: '1m15s', target: 25 },
+    //{ duration: '1m15s', target: 15 },
+    //{ duration: '1m15s', target: 10 }
   ],
   thresholds: {
     http_req_duration: ['p(95)<5000'],
@@ -121,7 +122,7 @@ export default function () {
     fetchPrometheusMetrics();
   }
 
-  //sleep(1);
+  sleep(1);
 }
 
 // Teardown - Obtener métricas finales
@@ -166,8 +167,6 @@ ${formatPrometheus(prometheusData.memory)}
 
   // Mostrar en consola
   console.log(summaryText);
-
-  // También devolver el resumen estándar de k6
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
