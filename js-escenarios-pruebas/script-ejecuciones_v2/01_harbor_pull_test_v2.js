@@ -24,7 +24,7 @@ const prometheusData = {
   lastUpdated: null
 };
 
-// Métricas personalizadas
+// Métricas Solicitudes
 const successfulRequests = new Counter('successful_requests');
 const failedRequests = new Counter('failed_requests');
 const responseTimes = new Trend('response_times');
@@ -67,9 +67,10 @@ function fetchPrometheusMetrics() {
 // Configuración de la prueba
 export const options = {
   stages: [
-    { duration: '30s', target: 5 },
-    { duration: '2m', target: 10 },
-    { duration: '30s', target: 5 }
+    { duration: '1m15s', target: 50 },
+    { duration: '1m15s', target: 25 },
+    { duration: '1m15s', target: 15 },
+    { duration: '1m15s', target: 10 }
   ],
   thresholds: {
     http_req_duration: ['p(95)<5000'],
@@ -93,7 +94,7 @@ export default function () {
           'Content-Type': 'application/octet-stream',
           'Authorization': `Basic ${authToken}`
         },
-        timeout: '120s'
+        timeout: '360s'
       }
     );
     
@@ -128,7 +129,7 @@ export function teardown() {
   fetchPrometheusMetrics();
 }
 
-// Resumen final con manejo seguro de errores
+// Resumen final 
 export function handleSummary(data) {
   // Asegurarse de tener las métricas más recientes
   fetchPrometheusMetrics();
@@ -141,6 +142,7 @@ export function handleSummary(data) {
 
   // Calcular métricas básicas
   const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
+  const durationInMinutes = (duration / 60).toFixed(2);
   const iterations = safeMetric('iterations');
   const successes = safeMetric('successful_requests');
   const failures = safeMetric('failed_requests');
@@ -156,14 +158,8 @@ export function handleSummary(data) {
 
   // Crear resumen completo
   const summaryText = `
-============================== RESUMEN FINAL ==============================
-Duración:          ${duration} segundos
-Iteraciones:       ${iterations}
-Peticiones exitosas: ${successes}
-Peticiones fallidas: ${failures}
-Tasa de éxito:     ${successRate}%
-Tiempo respuesta:  ${avgResponseTime} ms (avg)
-Peticiones/seg:    ${rps}
+============================== RESUMEN =================================
+Duración:          ${durationInMinutes} minutos
 
 Uso de CPU:
 ${formatPrometheus(prometheusData.cpu)}
@@ -171,7 +167,7 @@ ${formatPrometheus(prometheusData.cpu)}
 Uso de Memoria:
 ${formatPrometheus(prometheusData.memory)}
 
-Última actualización: ${prometheusData.lastUpdated || 'N/A'}
+Ejecucion: ${prometheusData.lastUpdated || 'N/A'}
 =======================================================================
 `;
 
