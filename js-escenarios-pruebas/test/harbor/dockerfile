@@ -4,24 +4,5 @@ FROM ubuntu:latest
 # Evitar prompts interactivos durante la instalación
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Actualizar el sistema e instalar paquetes básicos
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y \
-        curl \
-        wget \
-        git \
-        build-essential \
-        software-properties-common && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Establecer variables de entorno
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
-
-# Configurar el directorio de trabajo
-WORKDIR /app
-
 # Comando por defecto (puede ser sobrescrito al ejecutar el contenedor)
 CMD ["/bin/bash"]
