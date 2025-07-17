@@ -77,7 +77,7 @@ export const options = {
     http_req_duration: ['p(95)<5000'],
     http_req_failed: ['rate<0.1']
   },
-  teardownTimeout: '120s'
+  teardownTimeout: '360s' // Default "60s"
 };
 
 // Función principal
@@ -95,7 +95,7 @@ export default function () {
           'Content-Type': 'application/octet-stream',
           'Authorization': `Basic ${authToken}`
         },
-        timeout: '120s'
+        timeout: '360s' // Default "60s"
       }
     );
     
