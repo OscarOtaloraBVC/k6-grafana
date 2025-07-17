@@ -67,7 +67,7 @@ function fetchPrometheusMetrics() {
 // Configuración de la prueba
 export const options = {
   stages: [
-    { duration: '5m', target: 10 }
+    { duration: '10m', target: 10 }
     //{ duration: '1m15s', target: 50 },
     //{ duration: '1m15s', target: 25 },
     //{ duration: '1m15s', target: 15 },
@@ -77,7 +77,7 @@ export const options = {
     http_req_duration: ['p(95)<5000'],
     http_req_failed: ['rate<0.1']
   },
-  teardownTimeout: '360s'
+  teardownTimeout: '600s'
 };
 
 // Función principal
