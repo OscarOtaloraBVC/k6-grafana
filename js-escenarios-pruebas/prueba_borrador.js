@@ -135,8 +135,16 @@ export function handleSummary(data) {
     return data.metrics[metric][prop] || defaultValue;
   };
 
-  // Calcular métricas básicas
-  const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
+  // Calcular métricas básicas - Validación segura de data.state
+  let duration = 0;
+  if (data && data.state && typeof data.state.testRunDurationMs === 'number') {
+    duration = data.state.testRunDurationMs / 1000;
+  } else if (data && data.metrics && data.metrics.iteration_duration && data.metrics.iteration_duration.values) {
+    // Alternativa: calcular duración aproximada basada en iteraciones
+    const iterationData = data.metrics.iteration_duration.values;
+    duration = (iterationData.max || 0) * (data.metrics.iterations ? data.metrics.iterations.count : 1);
+  }
+  
   const durationInMinutes = (duration / 60).toFixed(2);
   
   // Formatear métricas de Prometheus
@@ -161,8 +169,18 @@ ${formatPrometheus(prometheusData.memory)}
 
   // Mostrar en consola
   console.log(summaryText);
-  return {
-    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+  
+  // Retornar el resumen de manera segura
+  const result = {
     "summary.txt": summaryText
   };
+  
+  try {
+    result.stdout = textSummary(data, { indent: ' ', enableColors: true });
+  } catch (error) {
+    console.error('Error generando textSummary:', error);
+    result.stdout = 'Error generando resumen detallado';
+  }
+  
+  return result;
 }
