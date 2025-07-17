@@ -3,9 +3,7 @@ import { check, sleep } from 'k6';
 import http from 'k6/http';
 import exec from 'k6/x/exec';
 
-import exec from 'k6/execution';
-
-
+// Configuración
 const HARBOR_URL = 'test-nuam-registry.coffeesoft.org';
 const PROJECT_NAME = 'library';
 const IMAGE_NAME = 'ubuntu';
