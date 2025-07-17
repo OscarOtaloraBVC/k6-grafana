@@ -67,7 +67,7 @@ function fetchPrometheusMetrics() {
 // Configuración de la prueba
 export const options = {
   stages: [
-    { duration: '10m', target: 10 }
+    { duration: '10m', target: 5 }
     //{ duration: '1m15s', target: 50 },
     //{ duration: '1m15s', target: 25 },
     //{ duration: '1m15s', target: 15 },
@@ -95,7 +95,7 @@ export default function () {
           'Content-Type': 'application/octet-stream',
           'Authorization': `Basic ${authToken}`
         },
-        timeout: '360s'
+        timeout: '600s'
       }
     );
     
