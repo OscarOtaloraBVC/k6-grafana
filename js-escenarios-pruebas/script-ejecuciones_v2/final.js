@@ -171,36 +171,12 @@ Ejecucion: ${prometheusData.lastUpdated || 'N/A'}
 =======================================================================
 `;
 
-//  // Mostrar en consola
-//  console.log(summaryText);
-//
-//  // También devolver el resumen estándar de k6
-//  return {
-//    stdout: textSummary(data, { indent: ' ', enableColors: true }),
-//    "summary.txt": summaryText
-//  };
+  // Mostrar en consola
+  console.log(summaryText);
 
-// Preparar datos para el resumen estándar
-  const metricsData = {
-    metrics: {
-      total_iterations: { value: iterations },
-      successful_uploads: { value: successes },
-      failed_uploads: { value: failures },
-      upload_times: { 
-        avg: avgUploadTime,
-        min: uploadTimes.min || 0,
-        max: uploadTimes.max || 0,
-        med: uploadTimes.med || 0,
-        p90: uploadTimes.p(90) || 0,
-        p95: uploadTimes.p(95) || 0
-      }
-    }
-  };
-
+  // También devolver el resumen estándar de k6
   return {
-    stdout: textSummary(metricsData, { indent: ' ', enableColors: true }),
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
   };
-
-
 }
