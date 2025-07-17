@@ -173,11 +173,14 @@ export function handleSummary(data) {
   // Resumen expandido
   const summaryText = `
 ============================== RESUMEN =================================
-Duración:          ${durationInMinutes} minutos
+Duración:          ${durationInMinutes} minutos (${duration.toFixed(2)}s)
 Iteraciones:       ${iterations}
+VUs máximos:       ${vusMax}
 HTTP Requests:     ${httpReqs}
 HTTP Failed Rate:  ${(httpReqFailed * 100).toFixed(2)}%
 Avg Iteration:     ${(avgIterationDuration / 1000).toFixed(2)}s
+Data Sent:         ${dataSent} bytes
+Data Received:     ${dataReceived} bytes
 
 Uso de CPU Harbor:
 ${formatPrometheus(prometheusData.cpu)}
@@ -185,6 +188,7 @@ ${formatPrometheus(prometheusData.cpu)}
 Uso de Memoria Harbor:
 ${formatPrometheus(prometheusData.memory)}
 
+Última actualización métricas: ${prometheusData.lastUpdated || 'No disponible'}
 =======================================================================
 `;
 
@@ -199,14 +203,18 @@ ${formatPrometheus(prometheusData.memory)}
   // Intentar generar textSummary con más validaciones
   try {
     if (data && data.metrics && Object.keys(data.metrics).length > 0) {
-      result.stdout = textSummary(data, { indent: ' ', enableColors: true });
+      // Intentar con diferentes configuraciones de textSummary
+      result.stdout = textSummary(data, { 
+        indent: ' ', 
+        enableColors: false  // Desactivar colores para evitar problemas
+      });
     } else {
       console.log('No hay métricas disponibles para textSummary');
       result.stdout = summaryText; // Usar nuestro resumen personalizado
     }
   } catch (error) {
     console.error('Error generando textSummary:', JSON.stringify(error));
-    console.error('Data structure:', JSON.stringify(data, null, 2));
+    // En lugar de mostrar toda la estructura, usar nuestro resumen personalizado
     result.stdout = summaryText; // Usar nuestro resumen personalizado como fallback
   }
   
