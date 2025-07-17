@@ -1,6 +1,6 @@
 import { check, sleep } from 'k6';
-//import exec from 'k6/x/exec';
-import { Cmd } from 'k6/x/cmd';
+import exec from 'k6/x/exec';
+//import { Cmd } from 'k6/x/cmd';
  
 const HARBOR_URL = 'test-nuam-registry.coffeesoft.org';
 const PROJECT_NAME = 'library';
