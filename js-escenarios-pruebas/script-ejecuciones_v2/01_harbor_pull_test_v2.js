@@ -94,7 +94,7 @@ export default function () {
           'Content-Type': 'application/octet-stream',
           'Authorization': `Basic ${authToken}`
         },
-        timeout: '280s'
+        timeout: '300s'
       }
     );
     
