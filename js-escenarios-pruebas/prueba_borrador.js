@@ -1,5 +1,6 @@
-//import http from 'k6/http';
+import { textSummary } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
 import { check, sleep } from 'k6';
+import http from 'k6/http';
 import exec from 'k6/x/exec';
 
 
