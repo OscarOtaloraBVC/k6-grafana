@@ -62,7 +62,7 @@ function fetchPrometheusMetrics() {
 // Configuración iteraciones de la prueba
 export const options = {
   stages: [
-    { duration: '2m', target: 10 }   
+    { duration: '1m', target: 10 }   
     //{ duration: '1m15s', target: 50 },
     //{ duration: '1m15s', target: 25 },
     //{ duration: '1m15s', target: 15 },
