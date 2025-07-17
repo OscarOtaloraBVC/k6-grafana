@@ -94,7 +94,7 @@ export default function () {
           'Content-Type': 'application/octet-stream',
           'Authorization': `Basic ${authToken}`
         },
-        timeout: '360s'
+        timeout: '300s'
       }
     );
     
@@ -143,20 +143,14 @@ export function handleSummary(data) {
   // Calcular métricas básicas
   const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
   const durationInMinutes = (duration / 60).toFixed(2);
-  //const iterations = safeMetric('iterations');
-  //const successes = safeMetric('successful_requests');
-  //const failures = safeMetric('failed_requests');
-  //const successRate = iterations > 0 ? (successes / iterations * 100).toFixed(2) : 0;
-  //const avgResponseTime = safeMetric('response_times', 'avg', 0).toFixed(2);
-  //const rps = duration > 0 ? (iterations / duration).toFixed(2) : 0;
-
+  
   // Formatear métricas de Prometheus
   const formatPrometheus = (data) => {
     if (!Array.isArray(data) || data.length === 0) return 'No disponible';
     return data.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
 
-  // Crear resumen completo
+  // Resumen
   const summaryText = `
 ============================== RESUMEN =================================
 Duración:          ${durationInMinutes} minutos
