@@ -11,11 +11,20 @@ const HARBOR_USER = 'admin';
 const HARBOR_PASSWORD = 'r7Y5mQBwsM2lIj0';
  
 export const options = {
-    vus: 1,
-    duration: '15s',
+  stages: [
+    { duration: '10m', target: 10 }
+    // Puedes descomentar y agregar más etapas según necesites:
+    //{ duration: '1m15s', target: 50 },
+    //{ duration: '1m15s', target: 25 },
+    //{ duration: '1m15s', target: 15 },
+    //{ duration: '1m15s', target: 10 }
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<5000'],
+    http_req_failed: ['rate<0.1']
+  },
+  teardownTimeout: '360s' // Tiempo máximo para la fase de limpieza
 };
-
-
 
 function dockerLogin() {
     try {
@@ -30,7 +39,6 @@ function dockerLogin() {
 }
 
 export default function () {
-
     // Autenticación por cada usuario virtual (VU)
     if (!dockerLogin()) {
         check(false, { 'docker login failed': false });
@@ -59,5 +67,5 @@ export default function () {
         check(false,{ 'exception during docker push': false });
     }
  
-    sleep(5); // Simulate some processing time
+    sleep(5); // Simula tiempo de procesamiento
 }
