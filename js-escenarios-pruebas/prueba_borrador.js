@@ -3,12 +3,15 @@ import { check, sleep } from 'k6';
 import http from 'k6/http';
 import exec from 'k6/x/exec';
 
+import exec from 'k6/execution';
+
+
 const HARBOR_URL = 'test-nuam-registry.coffeesoft.org';
 const PROJECT_NAME = 'library';
 const IMAGE_NAME = 'ubuntu';
 const image_tag_prefix = 'latest';
-const PROMETHEUS_URL = 'http://localhost:9090'; // Make sure this is accessible from where k6 runs
-
+const PROMETHEUS_URL = 'http://localhost:9090';
+ 
 const HARBOR_USER = 'admin';
 const HARBOR_PASSWORD = 'r7Y5mQBwsM2lIj0';
 
@@ -23,22 +26,9 @@ const prometheusData = {
   lastUpdated: null
 };
 
-// Global variable to store Prometheus metrics across VUs (needs careful handling for aggregation)
-// For simplicity, we'll just store the last fetched value here,
-// but for true aggregation, you'd need custom metrics.
-let globalPrometheusMetrics = {
-    cpu: [],
-    memory: [],
-    lastUpdated: null
-};
-
 // Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
-  // *** IMPORTANT: Adjust this check based on your Prometheus setup ***
-  // If Prometheus is genuinely on localhost and accessible from k6,
-  // remove or modify this line.
-  // If it's a remote Prometheus, ensure PROMETHEUS_URL is correct.
-  if (!PROMETHEUS_URL) return;
+  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
 
   try {
     // Consulta CPU
@@ -66,9 +56,6 @@ function fetchPrometheusMetrics() {
     }
     
     prometheusData.lastUpdated = new Date().toISOString();
-    // Update global metrics for the summary
-    globalPrometheusMetrics = { ...prometheusData };
-
   } catch (error) {
     console.error('Error obteniendo métricas de Prometheus:', error);
   }
@@ -110,7 +97,6 @@ export default function () {
     }
         
     const uniqueTag = image_tag_prefix + '-' + new Date().getTime();
-    // Ensure unique path for each push to avoid conflicts
     const fullImageName =  HARBOR_URL+'/' +PROJECT_NAME +'/ubuntu/'+new Date().getTime() + '/' + IMAGE_NAME + ':' + uniqueTag;
     const sourceImage = IMAGE_NAME + ':latest';
  
@@ -133,25 +119,17 @@ export default function () {
     }
  
     sleep(5); // Simula tiempo de procesamiento
-
-    // Periodically fetch Prometheus metrics from a single VU or using shared iterations
-    // This is a simple example. For more robust Prometheus metric collection
-    // within k6, consider using a separate scenario for metric collection
-    // or k6's SharedArray for data sharing between VUs if needed.
-    if (__VU === 1 && __ITER % 5 === 0) { // Fetch metrics every 5 iterations from VU 1
-        fetchPrometheusMetrics();
-    }
 }
 
-// Teardown - Obtener métricas finales (ensure this can run)
+// Teardown - Obtener métricas finales
 export function teardown() {
-  fetchPrometheusMetrics(); // This will update globalPrometheusMetrics one last time
+  fetchPrometheusMetrics();
 }
 
 // Resumen final 
 export function handleSummary(data) {
-  // Use the globalPrometheusMetrics which were updated during the test and in teardown
-  const finalPrometheusData = globalPrometheusMetrics;
+  // Asegurarse de tener las métricas más recientes
+  fetchPrometheusMetrics();
 
   // Función para manejar métricas potencialmente no definidas
   const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
@@ -164,9 +142,9 @@ export function handleSummary(data) {
   const durationInMinutes = (duration / 60).toFixed(2);
   
   // Formatear métricas de Prometheus
-  const formatPrometheus = (metrics) => {
-    if (!Array.isArray(metrics) || metrics.length === 0) return 'No disponible';
-    return metrics.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
+  const formatPrometheus = (data) => {
+    if (!Array.isArray(data) || data.length === 0) return 'No disponible';
+    return data.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
 
   // Resumen
@@ -175,10 +153,10 @@ export function handleSummary(data) {
 Duración:          ${durationInMinutes} minutos
 
 Uso de CPU Harbor:
-${formatPrometheus(finalPrometheusData.cpu)}
+${formatPrometheus(prometheusData.cpu)}
 
 Uso de Memoria Harbor:
-${formatPrometheus(finalPrometheusData.memory)}
+${formatPrometheus(prometheusData.memory)}
 
 =======================================================================
 `;
