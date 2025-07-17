@@ -76,7 +76,7 @@ export const options = {
     http_req_duration: ['p(95)<5000'],
     http_req_failed: ['rate<0.1']
   },
-  teardownTimeout: '60s'
+  teardownTimeout: '360s'
 };
 
 // Función principal
