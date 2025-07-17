@@ -161,7 +161,6 @@ ${formatPrometheus(prometheusData.cpu)}
 Uso de Memoria:
 ${formatPrometheus(prometheusData.memory)}
 
-Ejecucion: ${prometheusData.lastUpdated || 'N/A'}
 =======================================================================
 `;
 
