@@ -1,8 +1,8 @@
-//prueba Stages
+//import http from 'k6/http';
 import { check, sleep } from 'k6';
 import exec from 'k6/x/exec';
-//import { Cmd } from 'k6/x/cmd';
- 
+
+
 const HARBOR_URL = 'test-nuam-registry.coffeesoft.org';
 const PROJECT_NAME = 'library';
 const IMAGE_NAME = 'ubuntu';
@@ -13,7 +13,7 @@ const HARBOR_PASSWORD = 'r7Y5mQBwsM2lIj0';
  
 export const options = {
   stages: [
-    { duration: '10m', target: 10 }
+    { duration: '2m', target: 10 }
     // Puedes descomentar y agregar más etapas según necesites:
     //{ duration: '1m15s', target: 50 },
     //{ duration: '1m15s', target: 25 },
@@ -21,10 +21,10 @@ export const options = {
     //{ duration: '1m15s', target: 10 }
   ],
   thresholds: {
-    http_req_duration: ['p(95)<5000'],
+    http_req_duration: ['p(95)<500'],
     http_req_failed: ['rate<0.1']
   },
-  teardownTimeout: '360s' // Tiempo máximo para la fase de limpieza
+  teardownTimeout: '60s' // Tiempo máximo para la fase de limpieza
 };
 
 function dockerLogin() {
