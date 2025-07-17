@@ -10,11 +10,26 @@ const image_tag_prefix = 'latest';
 const HARBOR_USER = 'admin';
 const HARBOR_PASSWORD = 'r7Y5mQBwsM2lIj0';
  
+//export const options = {
+//    vus: 1,
+//    duration: '15s',
+//};
+
 export const options = {
-    vus: 1,
-    duration: '15s',
- 
+  stages: [
+    { duration: '10m', target: 10 }
+    //{ duration: '1m15s', target: 50 },
+    //{ duration: '1m15s', target: 25 },
+    //{ duration: '1m15s', target: 15 },
+    //{ duration: '1m15s', target: 10 }
+  ],
+  thresholds: {
+    http_req_duration: ['p(95)<5000'],
+    http_req_failed: ['rate<0.1']
+  },
+  teardownTimeout: '60s' // Default "60s"
 };
+
 
 function dockerLogin() {
     try {
