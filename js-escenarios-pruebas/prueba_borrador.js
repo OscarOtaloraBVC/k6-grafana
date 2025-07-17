@@ -116,11 +116,6 @@ export default function () {
         check(false,{ 'exception during docker push': false });
     }
  
-    // Actualizar métricas cada 10 iteraciones
-      if (exec.scenario.iterationInTest % 10 === 0) {
-        fetchPrometheusMetrics();
-      }
-
     sleep(5); // Simula tiempo de procesamiento
 }
 
