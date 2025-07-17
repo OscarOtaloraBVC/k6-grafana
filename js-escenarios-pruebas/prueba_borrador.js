@@ -26,34 +26,51 @@ const prometheusData = {
 
 // Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
-  if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
+  // Comentar la línea que causa el retorno temprano para testing
+  // if (!PROMETHEUS_URL || PROMETHEUS_URL === 'http://localhost:9090') return;
+
+  if (!PROMETHEUS_URL) {
+    console.log('PROMETHEUS_URL no está definida');
+    return;
+  }
 
   try {
+    console.log(`Intentando obtener métricas de Prometheus desde: ${PROMETHEUS_URL}`);
+    
     // Consulta CPU
     const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
+    console.log(`CPU query response status: ${cpuRes.status}`);
+    
     if (cpuRes.status === 200) {
       const data = cpuRes.json();
-      if (data.status === "success") {
+      console.log('CPU query response:', JSON.stringify(data, null, 2));
+      if (data.status === "success" && data.data && data.data.result) {
         prometheusData.cpu = data.data.result.map(r => ({
           container: r.metric.container,
           usage: `${parseFloat(r.value[1]).toFixed(2)}%`
         }));
+        console.log('CPU metrics processed:', prometheusData.cpu);
       }
     }
 
     // Consulta Memoria
     const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
+    console.log(`Memory query response status: ${memRes.status}`);
+    
     if (memRes.status === 200) {
       const data = memRes.json();
-      if (data.status === "success") {
+      console.log('Memory query response:', JSON.stringify(data, null, 2));
+      if (data.status === "success" && data.data && data.data.result) {
         prometheusData.memory = data.data.result.map(r => ({
           container: r.metric.container,
           usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
         }));
+        console.log('Memory metrics processed:', prometheusData.memory);
       }
     }
     
     prometheusData.lastUpdated = new Date().toISOString();
+    console.log('Prometheus metrics updated at:', prometheusData.lastUpdated);
   } catch (error) {
     console.error('Error obteniendo métricas de Prometheus:', error);
   }
