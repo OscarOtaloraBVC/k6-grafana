@@ -17,7 +17,7 @@ export const options = {
 export default function () {
     const uniqueTag = image_tag_prefix + '-' + new Date().getTime();
     const fullImageName =  HARBOR_URL+'/' +PROJECT_NAME +'/ubuntu/'+new Date().getTime() + '/' + IMAGE_NAME + ':' + uniqueTag;
-    const sourceImage = IMAGE_NAME + ':latest';
+    const sourceImage = IMAGE_NAME + ':k6-prueba';
  
     console.log(`Pushing image: ${fullImageName} from source: ${sourceImage}`);
  
