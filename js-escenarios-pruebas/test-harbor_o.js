@@ -5,7 +5,7 @@ import exec from 'k6/x/exec';
 const HARBOR_URL = 'test-nuam-registry.coffeesoft.org';
 const PROJECT_NAME = 'library';
 const IMAGE_NAME = 'ubuntu';
-const image_tag_prefix = 'k6';
+const image_tag_prefix = 'latest';
  
  
 export const options = {
