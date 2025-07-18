@@ -99,17 +99,15 @@ export default function () {
     }
         
     const uniqueTag = image_tag_prefix + '-' + new Date().getTime();
-    const fullImageName =  HARBOR_URL+'/' +PROJECT_NAME +'/ubuntu/'+new Date().getTime() + '/' + IMAGE_NAME + ':' + uniqueTag;
+    const fullImageName = HARBOR_URL + '/' + PROJECT_NAME + '/ubuntu/' + new Date().getTime() + '/' + IMAGE_NAME + ':' + uniqueTag;
     const sourceImage = IMAGE_NAME + ':latest';
-    
-    console.log(`Pushing image: ${fullImageName} from source: ${sourceImage}`);
  
     try {
         console.log(`Tagging image: ${fullImageName} from source: ${sourceImage}`);
         exec.command('docker', ['tag', sourceImage, fullImageName]);
     } catch (error) {
         console.error(`Error tagging image: ${error}`);
-        check(false,{ 'exception during docker push': false });
+        check(false, { 'exception during docker push': false });
     }
  
     try {
@@ -117,7 +115,7 @@ export default function () {
         exec.command('docker', ['push', fullImageName]);
     } catch (error) {
         console.error(`Error pushing image: ${error}`);
-        check(false,{ 'exception during docker push': false });
+        check(false, { 'exception during docker push': false });
     }
  
     sleep(5);
