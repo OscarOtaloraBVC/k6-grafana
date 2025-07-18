@@ -19,17 +19,17 @@ const CPU_REGISTRY_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace
 const MEMORY_CORE_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container="core"}) by (container) / (1024*1024)';
 const MEMORY_REGISTRY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container="registry"}) by (container) / (1024*1024)';
 
-// Almacenamiento para métricas de Prometheus usando SharedArray para acceso entre VUs
-const prometheusData = new SharedArray('prometheus_metrics', () => [{
+// Almacenamiento para métricas de Prometheus
+let prometheusData = {
   cpu: [],
   memory: [],
   lastUpdated: null
-}]);
+};
 
-// Contador de iteraciones por VU
+// Contador de iteraciones
 let iterationCounter = 0;
 
-// Función para obtener y actualizar métricas de Prometheus
+// Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
   if (!PROMETHEUS_URL) return;
 
@@ -87,7 +87,7 @@ function fetchPrometheusMetrics() {
     }
     
     currentData.lastUpdated = new Date().toISOString();
-    prometheusData[0] = currentData;
+    prometheusData = currentData;
 
   } catch (error) {
     console.error('Error obteniendo métricas de Prometheus:', error);
@@ -149,8 +149,8 @@ export default function () {
  
     sleep(5);
 
-    // Obtener métricas cada 5 iteraciones
-    if (iterationCounter % 5 === 0) {
+    // Solo el primer VU actualiza las métricas para evitar concurrencia
+    if (__VU === 1 && iterationCounter % 5 === 0) {
         fetchPrometheusMetrics();
     }
 }
@@ -161,9 +161,6 @@ export function teardown() {
 }
 
 export function handleSummary(data) {
-  // Obtener los datos más recientes
-  const finalMetrics = prometheusData[0];
-
   const duration = data.state ? (data.state.testRunDurationMs / 1000 / 60) : 0;
   const durationInMinutes = duration.toFixed(2);
   
@@ -175,13 +172,13 @@ export function handleSummary(data) {
   const summaryText = `
 ============================== RESUMEN =================================
 Duración:          ${durationInMinutes} minutos
-Última actualización: ${finalMetrics.lastUpdated || 'No disponible'}
+Última actualización: ${prometheusData.lastUpdated || 'No disponible'}
 
 Uso de CPU Harbor:
-${formatPrometheus(finalMetrics.cpu)}
+${formatPrometheus(prometheusData.cpu)}
 
 Uso de Memoria Harbor:
-${formatPrometheus(finalMetrics.memory)}
+${formatPrometheus(prometheusData.memory)}
 
 =======================================================================
 `;
