@@ -154,14 +154,6 @@ export function handleSummary(data) {
 const summaryText = `
 Duración de la prueba: ${duration} minutos
 
-=== Resumen de Métricas de Harbor ===
-Última actualización: ${finalPrometheusMetrics.lastUpdated ? new Date(finalPrometheusMetrics.lastUpdated).toLocaleString() : 'N/A'}
-
-Uso de CPU:
-${formatPrometheus(finalPrometheusMetrics.cpu)}
-
-Uso de Memoria:
-${formatPrometheus(finalPrometheusMetrics.memory)}
 `;
 
   // Mostrar en consola
