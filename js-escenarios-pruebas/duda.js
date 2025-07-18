@@ -25,10 +25,10 @@ let finalPrometheusMetrics = {
 
 export const options = {
   stages: [
-    //{ duration: '1m20s', target: 50 },
-    //{ duration: '1m20s', target: 25 },
-    //{ duration: '1m20s', target: 15 },
-    { duration: '20s', target: 10 }  
+    { duration: '1m15s', target: 50 },
+    { duration: '1m15s', target: 25 },
+    { duration: '1m15s', target: 15 },
+    { duration: '1m15s', target: 10 }  
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
@@ -154,14 +154,10 @@ export function handleSummary(data) {
   // Calcular duración
   const duration = data.state ? (data.state.testRunDurationMs / 1000 / 60).toFixed(2) : 0;
 
-const summaryText = `
-Duración de la prueba: ${duration} minutos
-
-`;
+const summaryText = `Duración de la prueba: ${duration} minutos`;
 
   // Mostrar en consola
   console.log(summaryText);
-  console.log('Métricas de Prometheus actualizadas:', JSON.stringify(metrics));
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
   };
