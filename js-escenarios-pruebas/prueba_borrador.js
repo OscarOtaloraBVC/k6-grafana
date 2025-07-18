@@ -26,11 +26,11 @@ const prometheusData = {
 // Global variable to store Prometheus metrics across VUs (needs careful handling for aggregation)
 // For simplicity, we'll just store the last fetched value here,
 // but for true aggregation, you'd need custom metrics.
-//let globalPrometheusMetrics = {
-//    cpu: [],
-//    memory: [],
-//    lastUpdated: null
-//};
+let globalPrometheusMetrics = {
+    cpu: [],
+    memory: [],
+    lastUpdated: null
+};
 
 // Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
@@ -63,7 +63,7 @@ function fetchPrometheusMetrics() {
     
     prometheusData.lastUpdated = new Date().toISOString();
     // Update global metrics for the summary
-    //**globalPrometheusMetrics = { ...prometheusData };
+    globalPrometheusMetrics = { ...prometheusData };
 
   } catch (error) {
     console.error('Error obteniendo métricas de Prometheus:', error);
@@ -144,7 +144,7 @@ export function teardown() {
 // Resumen final 
 export function handleSummary(data) {
  
-  //*****const finalPrometheusData = globalPrometheusMetrics;
+  const finalPrometheusData = globalPrometheusMetrics;
 
   // Función para manejar métricas no definidas
   const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
