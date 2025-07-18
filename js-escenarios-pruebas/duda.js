@@ -12,91 +12,20 @@ const PROMETHEUS_URL = 'http://localhost:9090';
 const HARBOR_USER = 'admin';
 const HARBOR_PASSWORD = 'r7Y5mQBwsM2lIj0';
 
-// Consultas Prometheus separadas
-const CPU_CORE_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container="core"}[1m])) by (container) * 100'; 
-const CPU_REGISTRY_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container="registry"}[1m])) by (container) * 100';
+// Consultas Prometheus
+const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
+const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-const MEMORY_CORE_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container="core"}) by (container) / (1024*1024)';
-const MEMORY_REGISTRY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container="registry"}) by (container) / (1024*1024)';
-
-// Almacenamiento para métricas de Prometheus
-let prometheusData = {
+// Variable para almacenar las métricas finales
+let finalPrometheusMetrics = {
   cpu: [],
   memory: [],
   lastUpdated: null
 };
 
-// Contador de iteraciones
-let iterationCounter = 0;
-
-// Función para obtener métricas de Prometheus
-function fetchPrometheusMetrics() {
-  if (!PROMETHEUS_URL) return;
-
-  const currentData = { cpu: [], memory: [], lastUpdated: null };
-
-  try {
-    // Consultas CPU
-    const cpuCoreRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_CORE_QUERY)}`);
-    const cpuRegistryRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_REGISTRY_QUERY)}`);
-    
-    // Procesar resultados CPU
-    if (cpuCoreRes.status === 200) {
-      const data = cpuCoreRes.json();
-      if (data.status === "success" && data.data.result.length > 0) {
-        currentData.cpu.push({
-          container: 'core',
-          usage: `${parseFloat(data.data.result[0].value[1]).toFixed(2)}%`
-        });
-      }
-    }
-    
-    if (cpuRegistryRes.status === 200) {
-      const data = cpuRegistryRes.json();
-      if (data.status === "success" && data.data.result.length > 0) {
-        currentData.cpu.push({
-          container: 'registry',
-          usage: `${parseFloat(data.data.result[0].value[1]).toFixed(2)}%`
-        });
-      }
-    }
-
-    // Consultas Memoria
-    const memCoreRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_CORE_QUERY)}`);
-    const memRegistryRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_REGISTRY_QUERY)}`);
-    
-    // Procesar resultados Memoria
-    if (memCoreRes.status === 200) {
-      const data = memCoreRes.json();
-      if (data.status === "success" && data.data.result.length > 0) {
-        currentData.memory.push({
-          container: 'core',
-          usage: `${parseFloat(data.data.result[0].value[1]).toFixed(2)} MB`
-        });
-      }
-    }
-    
-    if (memRegistryRes.status === 200) {
-      const data = memRegistryRes.json();
-      if (data.status === "success" && data.data.result.length > 0) {
-        currentData.memory.push({
-          container: 'registry',
-          usage: `${parseFloat(data.data.result[0].value[1]).toFixed(2)} MB`
-        });
-      }
-    }
-    
-    currentData.lastUpdated = new Date().toISOString();
-    prometheusData = currentData;
-
-  } catch (error) {
-    console.error('Error obteniendo métricas de Prometheus:', error);
-  }
-}
-
 export const options = {
   stages: [
-    { duration: '1m', target: 10 }
+    { duration: '1m', target: 10 }   
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
@@ -104,6 +33,54 @@ export const options = {
   },
   teardownTimeout: '60s'
 };
+
+function fetchPrometheusMetrics() {
+  if (!PROMETHEUS_URL) {
+    console.log('Prometheus URL no definida');
+    return null;
+  }
+
+  const metrics = {
+    cpu: [],
+    memory: [],
+    lastUpdated: null
+  };
+
+  try {
+    // Consulta CPU
+    const cpuRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(CPU_QUERY)}`);
+    if (cpuRes.status === 200) {
+      const data = cpuRes.json();
+      if (data.status === "success" && data.data && data.data.result) {
+        metrics.cpu = data.data.result.map(r => ({
+          container: r.metric.container,
+          usage: `${parseFloat(r.value[1]).toFixed(2)}%`
+        }));
+      }
+    }
+
+    // Consulta Memoria
+    const memRes = http.get(`${PROMETHEUS_URL}/api/v1/query?query=${encodeURIComponent(MEMORY_QUERY)}`);
+    if (memRes.status === 200) {
+      const data = memRes.json();
+      if (data.status === "success" && data.data && data.data.result) {
+        metrics.memory = data.data.result.map(r => ({
+          container: r.metric.container,
+          usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
+        }));
+      }
+    }
+    
+    metrics.lastUpdated = new Date().toISOString();
+    console.log('Métricas de Prometheus actualizadas:', JSON.stringify(metrics));
+    
+    return metrics;
+
+  } catch (error) {
+    console.error('Error obteniendo métricas de Prometheus:', error);
+    return null;
+  }
+}
 
 function dockerLogin() {
     try {
@@ -118,21 +95,16 @@ function dockerLogin() {
 }
 
 export default function () {
-    iterationCounter++;
-    
     if (!dockerLogin()) {
         check(false, { 'docker login failed': false });
         return;
     }
         
     const uniqueTag = image_tag_prefix + '-' + new Date().getTime();
-    const fullImageName = `${HARBOR_URL}/${PROJECT_NAME}/ubuntu/${new Date().getTime()}/${IMAGE_NAME}:${uniqueTag}`;
-    const sourceImage = `${IMAGE_NAME}:latest`;
- 
-    console.log(`Pushing image: ${fullImageName} from source: ${sourceImage}`);
+    const fullImageName = HARBOR_URL + '/' + PROJECT_NAME + '/ubuntu/' + new Date().getTime() + '/' + IMAGE_NAME + ':' + uniqueTag;
+    const sourceImage = IMAGE_NAME + ':latest';
  
     try {
-        console.log(`Tagging image: ${fullImageName} from source: ${sourceImage}`);
         exec.command('docker', ['tag', sourceImage, fullImageName]);
     } catch (error) {
         console.error(`Error tagging image: ${error}`);
@@ -140,7 +112,6 @@ export default function () {
     }
  
     try {
-        console.log(`Pushing image: ${fullImageName} to Harbor`);
         exec.command('docker', ['push', fullImageName]);
     } catch (error) {
         console.error(`Error pushing image: ${error}`);
@@ -149,41 +120,51 @@ export default function () {
  
     sleep(5);
 
-    // Solo el primer VU actualiza las métricas para evitar concurrencia
-    if (__VU === 1 && iterationCounter % 5 === 0) {
-        fetchPrometheusMetrics();
+    // Solo el primer VU actualiza las métricas periódicamente
+    if (__VU === 1 && __ITER % 5 === 0) {
+      const metrics = fetchPrometheusMetrics();
+      if (metrics) {
+        finalPrometheusMetrics = metrics;
+      }
     }
 }
 
 export function teardown() {
-  // Forzar una última actualización de métricas
-  fetchPrometheusMetrics();
+  // Obtenemos las métricas finales
+  const metrics = fetchPrometheusMetrics();
+  if (metrics) {
+    finalPrometheusMetrics = metrics;
+  }
 }
 
 export function handleSummary(data) {
-  const duration = data.state ? (data.state.testRunDurationMs / 1000 / 60) : 0;
-  const durationInMinutes = duration.toFixed(2);
-  
+  // Función para formatear métricas
   const formatPrometheus = (metrics) => {
-    if (!Array.isArray(metrics) || metrics.length === 0) return '  No disponible';
+    if (!metrics || !Array.isArray(metrics) || metrics.length === 0) return 'No disponible';
     return metrics.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
 
+  // Calcular duración
+  const duration = data.state ? (data.state.testRunDurationMs / 1000 / 60).toFixed(2) : 0;
+
+  // Resumen
   const summaryText = `
 ============================== RESUMEN =================================
-Duración:          ${durationInMinutes} minutos
-Última actualización: ${prometheusData.lastUpdated || 'No disponible'}
+Duración:          ${duration} minutos
+Última actualización: ${finalPrometheusMetrics.lastUpdated || 'No disponible'}
 
 Uso de CPU Harbor:
-${formatPrometheus(prometheusData.cpu)}
+${formatPrometheus(finalPrometheusMetrics.cpu)}
 
 Uso de Memoria Harbor:
-${formatPrometheus(prometheusData.memory)}
+${formatPrometheus(finalPrometheusMetrics.memory)}
 
 =======================================================================
 `;
 
-  console.log(summaryText);
+  // Mostrar en consola
+  console.log('\n' + summaryText);
+  
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
