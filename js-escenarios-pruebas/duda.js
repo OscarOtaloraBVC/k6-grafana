@@ -33,6 +33,9 @@ let globalPrometheusMetrics = {
     lastUpdated: null
 };
 
+// Contador de iteraciones por VU
+let iterationCounter = 0;
+
 // Función para obtener métricas de Prometheus
 function fetchPrometheusMetrics() {
   if (!PROMETHEUS_URL) return;
@@ -103,17 +106,13 @@ function fetchPrometheusMetrics() {
 // Configuración iteraciones de la prueba
 export const options = {
   stages: [
-    { duration: '1m', target: 10 }   
-    //{ duration: '1m15s', target: 50 },
-    //{ duration: '1m15s', target: 25 },
-    //{ duration: '1m15s', target: 15 },
-    //{ duration: '1m15s', target: 10 }
+    { duration: '1m', target: 10 }
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
     http_req_failed: ['rate<0.1']
   },
-  teardownTimeout: '60s' // Tiempo máximo para la fase de limpieza
+  teardownTimeout: '60s'
 };
 
 function dockerLogin() {
@@ -129,6 +128,9 @@ function dockerLogin() {
 }
 
 export default function () {
+    // Incrementar el contador de iteraciones
+    iterationCounter++;
+    
     // Autenticación por cada usuario virtual (VU)
     if (!dockerLogin()) {
         check(false, { 'docker login failed': false });
@@ -136,8 +138,7 @@ export default function () {
     }
         
     const uniqueTag = image_tag_prefix + '-' + new Date().getTime();
-  
-    const fullImageName =  HARBOR_URL+'/' +PROJECT_NAME +'/ubuntu/'+new Date().getTime() + '/' + IMAGE_NAME + ':' + uniqueTag;
+    const fullImageName = HARBOR_URL + '/' + PROJECT_NAME + '/ubuntu/' + new Date().getTime() + '/' + IMAGE_NAME + ':' + uniqueTag;
     const sourceImage = IMAGE_NAME + ':latest';
  
     console.log(`Pushing image: ${fullImageName} from source: ${sourceImage}`);
@@ -147,7 +148,7 @@ export default function () {
         exec.command('docker', ['tag', sourceImage, fullImageName]);
     } catch (error) {
         console.error(`Error tagging image: ${error}`);
-        check(false,{ 'exception during docker push': false });
+        check(false, { 'exception during docker push': false });
     }
  
     try {
@@ -155,12 +156,13 @@ export default function () {
         exec.command('docker', ['push', fullImageName]);
     } catch (error) {
         console.error(`Error pushing image: ${error}`);
-        check(false,{ 'exception during docker push': false });
+        check(false, { 'exception during docker push': false });
     }
  
     sleep(5); // Simula tiempo de procesamiento
 
-    if (exec.scenario.iterationInTest % 1 === 0) { // Fetch metrics every iteration
+    // Obtener métricas cada 5 iteraciones
+    if (iterationCounter % 5 === 0) {
         fetchPrometheusMetrics();
     }
 }
@@ -172,7 +174,6 @@ export function teardown() {
 
 // Resumen final 
 export function handleSummary(data) {
- 
   const finalPrometheusMetrics = globalPrometheusMetrics;
 
   // Función para manejar métricas no definidas
