@@ -152,19 +152,14 @@ export function handleSummary(data) {
   const duration = data.state ? (data.state.testRunDurationMs / 1000 / 60).toFixed(2) : 0;
 
   // Resumen
-//  const summaryText = `
-//============================== RESUMEN =================================
-//Duración:          ${duration} minutos
-//Última actualización: ${finalPrometheusMetrics.lastUpdated || 'No disponible'}
 
-//Uso de CPU Harbor:
-//${formatPrometheus(finalPrometheusMetrics.cpu)}
+  const summaryText = `Duración: ${duration} minutos, 
+Uso de CPU Harbor:
+${formatPrometheus(finalPrometheusMetrics.cpu)}
+Uso de Memoria Harbor:
+${formatPrometheus(finalPrometheusMetrics.memory)}
 
-//Uso de Memoria Harbor:
-//${formatPrometheus(finalPrometheusMetrics.memory)}
-
-//=======================================================================
-//`;
+`;
 
   // Mostrar en consola
   console.log('\n' + summaryText);
