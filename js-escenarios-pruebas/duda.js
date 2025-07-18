@@ -16,7 +16,7 @@ const HARBOR_PASSWORD = 'r7Y5mQBwsM2lIj0';
 const CPU_QUERY = 'sum(rate(container_cpu_usage_seconds_total{namespace="registry", container=~"core|registry"}[1m])) by (container) * 100';
 const MEMORY_QUERY = 'sum(container_memory_working_set_bytes{namespace="registry", container=~"core|registry"}) by (container) / (1024*1024)';
 
-// Almacenamiento para métricas de Prometheus
+// Usamos un objeto en el contexto init para persistir los datos
 let prometheusData = {
   cpu: [],
   memory: [],
@@ -53,8 +53,6 @@ function fetchPrometheusMetrics() {
           usage: `${parseFloat(r.value[1]).toFixed(2)}%`
         }));
       }
-    } else {
-      console.log(`Error en consulta CPU: ${cpuRes.status}`);
     }
 
     // Consulta Memoria
@@ -67,8 +65,6 @@ function fetchPrometheusMetrics() {
           usage: `${parseFloat(r.value[1]).toFixed(2)} MB`
         }));
       }
-    } else {
-      console.log(`Error en consulta Memoria: ${memRes.status}`);
     }
     
     prometheusData.lastUpdated = new Date().toISOString();
@@ -77,6 +73,7 @@ function fetchPrometheusMetrics() {
   } catch (error) {
     console.error('Error obteniendo métricas de Prometheus:', error);
   }
+  return prometheusData;
 }
 
 function dockerLogin() {
@@ -91,7 +88,12 @@ function dockerLogin() {
     }
 }
 
-export default function () {
+export function setup() {
+  // Obtenemos métricas iniciales
+  return fetchPrometheusMetrics();
+}
+
+export default function (initData) {
     // Autenticación por cada usuario virtual (VU)
     if (!dockerLogin()) {
         check(false, { 'docker login failed': false });
@@ -120,46 +122,49 @@ export default function () {
  
     sleep(5);
 
-    // Obtener métricas de Prometheus en cada iteración
-    fetchPrometheusMetrics();
+    // Actualizamos métricas periódicamente (solo en el VU 1)
+    if (__VU === 1 && __ITER % 5 === 0) {
+      prometheusData = fetchPrometheusMetrics();
+    }
 }
 
 export function teardown() {
-  // Obtener métricas finales
-  fetchPrometheusMetrics();
+  // Obtenemos métricas finales
+  const finalMetrics = fetchPrometheusMetrics();
+  return { prometheus: finalMetrics };
 }
 
 export function handleSummary(data) {
-  // Función para manejar métricas no definidas
-  const safeMetric = (metric, prop = 'count', defaultValue = 0) => {
-    if (!data.metrics || !data.metrics[metric]) return defaultValue;
-    return data.metrics[metric][prop] || defaultValue;
-  };
+  // Obtenemos los datos de Prometheus del teardown
+  const prometheusResults = data.setupData || data.teardownData?.prometheus || prometheusData;
 
-  // Calcular métricas básicas
-  const duration = data.state ? (data.state.testRunDurationMs / 1000) : 0;
-  const durationInMinutes = (duration / 60).toFixed(2);
-  
-  // Formatear métricas de Prometheus
+  // Función para formatear métricas
   const formatPrometheus = (metrics) => {
-    if (!Array.isArray(metrics) || metrics.length === 0) return 'No disponible';
+    if (!metrics || !Array.isArray(metrics) || metrics.length === 0) return 'No disponible';
     return metrics.map(item => `  ${item.container.padEnd(10)}: ${item.usage}`).join('\n');
   };
+
+  // Calcular duración
+  const duration = data.state ? (data.state.testRunDurationMs / 1000 / 60).toFixed(2) : 0;
 
   // Resumen
   const summaryText = `
 ============================== RESUMEN =================================
-Duración:          ${durationInMinutes} minutos
+Duración:          ${duration} minutos
+Última actualización: ${prometheusResults.lastUpdated || 'No disponible'}
 
 Uso de CPU Harbor:
-${formatPrometheus(prometheusData.cpu)}
+${formatPrometheus(prometheusResults.cpu)}
 
 Uso de Memoria Harbor:
-${formatPrometheus(prometheusData.memory)}
+${formatPrometheus(prometheusResults.memory)}
 
 =======================================================================
 `;
 
+  // Mostrar en consola
+  console.log('\n' + summaryText);
+  
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
