@@ -168,7 +168,7 @@ ${formatPrometheus(finalPrometheusMetrics.memory)}
 
   // Mostrar en consola
   console.log('\n' + summaryText);
-  
+  console.log('Métricas de Prometheus actualizadas:', JSON.stringify(metrics));
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
     "summary.txt": summaryText
