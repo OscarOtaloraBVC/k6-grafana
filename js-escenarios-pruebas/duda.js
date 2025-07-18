@@ -25,10 +25,10 @@ let finalPrometheusMetrics = {
 
 export const options = {
   stages: [
-    { duration: '30s', target: 50 },
-    { duration: '30s', target: 25 },
-    { duration: '30s', target: 15 },
-    { duration: '30s', target: 10 }  
+    { duration: '30s', vus: 50 },
+    { duration: '30s', vus: 25 },
+    { duration: '30s', vus: 15 },
+    { duration: '30s', vus: 10 }  
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
