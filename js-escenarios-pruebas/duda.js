@@ -25,7 +25,7 @@ let finalPrometheusMetrics = {
 
 export const options = {
   stages: [
-    { duration: '1m', target: 10 }   
+    { duration: '30s', target: 10 }   
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
