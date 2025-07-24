@@ -28,7 +28,7 @@ export const options = {
     //{ duration: '1m15s', target: 50 },
     //{ duration: '1m15s', target: 25 },
     //{ duration: '1m15s', target: 15 },
-    { duration: '1m15s', target: 15 }  
+    { duration: '5m', target: 15 }  
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
