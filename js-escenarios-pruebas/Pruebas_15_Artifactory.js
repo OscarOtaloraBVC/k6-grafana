@@ -40,8 +40,8 @@ export const options = {
 export function setup() {
   console.log('Realizando autenticación inicial...');
   try {
-    const cmd = `docker login ${ARTIFACTORY_URL} -u ${ARTIFACTORY_USER} -p ${ARTIFACTORY_PASSWORD}`;
-    exec.command('sh', ['-c', cmd]);
+    const cmd = `docker login ${ARTIFACTORY_URL} -u ${ARTIFACTORY_USER} --password-stdin`;
+    exec.command('sh', ['-c', `echo "${ARTIFACTORY_PASSWORD}" | ${cmd}`]);
     return { success: true };
   } catch (error) {
     console.error('Error en autenticación:', error);
