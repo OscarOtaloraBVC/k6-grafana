@@ -25,9 +25,6 @@ let finalPrometheusMetrics = {
 
 export const options = {
   stages: [
-    //{ duration: '1m15s', target: 50 },
-    //{ duration: '1m15s', target: 25 },
-    //{ duration: '1m15s', target: 15 },
     { duration: '5m', target: 15 }  
   ],
   thresholds: {
