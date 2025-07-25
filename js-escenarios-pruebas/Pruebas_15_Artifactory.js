@@ -29,7 +29,7 @@ export const options = {
   stages: [
     //{ duration: '1m', target: 10 },  // Rampa inicial
     //{ duration: '3m', target: 50 },  // Carga sostenida
-    { duration: '1m', target: 15 }    // Rampa descendente
+    { duration: '5m', target: 15 }    // Rampa descendente
   ],
   thresholds: {
     http_req_duration: ['p(95)<1000'],
