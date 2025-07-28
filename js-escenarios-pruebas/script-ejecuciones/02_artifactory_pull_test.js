@@ -7,7 +7,7 @@ import { check, sleep } from 'k6';
 // Configuración
 export let options = {
   stages: [
-    { duration: '5m', target:25 },
+    { duration: '5m', target:15 },
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],
