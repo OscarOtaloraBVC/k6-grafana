@@ -53,7 +53,7 @@ export let options = {
     //  maxVUs: 100,
     //  exec: 'mediumLoadScenario',
     //},
-    // Escenario 3 - Baja carga
+    // Escenario 3 - Baja carga.
     //low_load: {
     //  executor: 'constant-arrival-rate',
     //  rate: 70, // 10 Harbor + 10 Artifactory + 25 Vault + 25 Keycloak + margen
