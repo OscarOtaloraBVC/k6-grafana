@@ -27,9 +27,9 @@ const USERNAME = __ENV.ARTIFACTORY_USER || 'admin';
 const PASSWORD = __ENV.ARTIFACTORY_PASS || 'Nuam123.*';
 const REPO = __ENV.ARTIFACTORY_REPO || 'k6-prueba';
 const FILE_PATHS = [
-  'test/testfile-15mb.bin',
-  'test/testfile-20mb.bin',
-  'test/testfile-25mb.bin',
+  //'test/testfile-15mb.bin',
+  //'test/testfile-20mb.bin',
+  //'test/testfile-25mb.bin',
   'test/testfile-30mb.bin'
 ];
 
