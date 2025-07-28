@@ -456,9 +456,4 @@ export function handleSummary(data) {
       keycloak: data.metrics['checks'].values['keycloak auth success'] || 0
     }
   };
-
-  return {
-    'stdout': textSummary(data, { indent: ' ', enableColors: true }),
-    './summary.json': JSON.stringify(summary, null, 2)
-  };
 }
