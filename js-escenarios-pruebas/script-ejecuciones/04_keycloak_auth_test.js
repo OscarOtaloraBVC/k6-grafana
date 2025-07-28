@@ -7,7 +7,7 @@ import { check, sleep, fail, group } from 'k6';
 // Configuración corregida
 export let options = {
   stages: [
-    { duration: '5m', target: 25 },  // Ejecucion 
+    { duration: '5m', target: 50 },  // Ejecucion 
 
   ],
   thresholds: {
