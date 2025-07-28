@@ -7,15 +7,8 @@ import { check, sleep, fail, group } from 'k6';
 // Configuración corregida
 export let options = {
   stages: [
-    { duration: '1m', target: 100 },  // Ejecucion a 100 peticiones/segundo
-    { duration: '2m', target: 100 },  // Mantener 100 peticiones/segundo
-    { duration: '1m', target: 50 },   // Reducir a 50 peticiones/segundo
-    { duration: '2m', target: 50 },   // Mantener 50 peticiones/segundo
-    { duration: '1m', target: 25 },   // Reducir a 25 peticiones/segundo
-    { duration: '2m', target: 25 },   // Mantener 25 peticiones/segundo
-    { duration: '1m', target: 15 },   // Reducir a 15 peticiones/segundo
-    { duration: '2m', target: 15 },   // Mantener 15 peticiones/segundo
-    { duration: '1m', target: 0 },    // Pausa final
+    { duration: '5m', target: 15 },  // Ejecucion a 100 peticiones/segundo
+
   ],
   thresholds: {
     //'http_req_duration': ['avg<300', 'p(95)<500'],
