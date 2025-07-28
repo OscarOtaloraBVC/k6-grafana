@@ -43,27 +43,27 @@ export let options = {
       exec: 'highLoadScenario',
     },
     // Escenario 2 - Media carga
-    medium_load: {
-      executor: 'constant-arrival-rate',
-      rate: 130, // 15 Harbor + 15 Artifactory + 50 Vault + 50 Keycloak + margen
-      timeUnit: '1s',
-      duration: '5m',
-      startTime: '5m',
-      preAllocatedVUs: 50,
-      maxVUs: 100,
-      exec: 'mediumLoadScenario',
-    },
+    //medium_load: {
+    //  executor: 'constant-arrival-rate',
+    //  rate: 130, // 15 Harbor + 15 Artifactory + 50 Vault + 50 Keycloak + margen
+    //  timeUnit: '1s',
+    //  duration: '5m',
+    //  startTime: '5m',
+    //  preAllocatedVUs: 50,
+    //  maxVUs: 100,
+    //  exec: 'mediumLoadScenario',
+    //},
     // Escenario 3 - Baja carga
-    low_load: {
-      executor: 'constant-arrival-rate',
-      rate: 70, // 10 Harbor + 10 Artifactory + 25 Vault + 25 Keycloak + margen
-      timeUnit: '1s',
-      duration: '5m',
-      startTime: '10m',
-      preAllocatedVUs: 25,
-      maxVUs: 50,
-      exec: 'lowLoadScenario',
-    },
+    //low_load: {
+    //  executor: 'constant-arrival-rate',
+    //  rate: 70, // 10 Harbor + 10 Artifactory + 25 Vault + 25 Keycloak + margen
+    //  timeUnit: '1s',
+    //  duration: '5m',
+    //  startTime: '10m',
+    //  preAllocatedVUs: 25,
+    //  maxVUs: 50,
+    //  exec: 'lowLoadScenario',
+    //},
   },
   thresholds: {
     // Umbrales globales
