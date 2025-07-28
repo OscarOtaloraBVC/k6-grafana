@@ -99,13 +99,3 @@ export default function () {
 
   sleep(1);
 }
-
-// ======================
-// Reporte final
-// ======================
-export function handleSummary(data) {
-  return {
-    'stdout': textSummary(data, { indent: ' ', enableColors: true }),
-    './summary.json': JSON.stringify(data)
-  };
-}
