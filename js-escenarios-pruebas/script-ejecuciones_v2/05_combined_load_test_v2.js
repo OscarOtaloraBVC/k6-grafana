@@ -1,12 +1,3 @@
-// EC K8S DevOps 05 - Prueba masiva de consultas en aplicativos (Harbor, Artifactory, Vault y Keycloak)
-// Este escenario combina las pruebas de Harbor, Artifactory, Vault y Keycloak
-// con diferentes tasas de llegada para simular alta, media y baja carga.
-// Utiliza un enfoque de tasa constante para controlar la carga en cada servicio.
-// https://nuamexchange.atlassian.net/wiki/x/IYD2Mw 
-// EC K8S DevOps 05 - Prueba masiva de consultas en aplicactivos (Harbor, Artifactory, Vault y Keycloak)
-// Ejecucion k6 run 05_combined_load_test.js
-// ======================
-
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
 import { Trend, Rate, Counter } from 'k6/metrics';
@@ -43,27 +34,27 @@ export let options = {
       exec: 'highLoadScenario',
     },
     // Escenario 2 - Media carga
-    //medium_load: {
-    //  executor: 'constant-arrival-rate',
-    //  rate: 130, // 15 Harbor + 15 Artifactory + 50 Vault + 50 Keycloak + margen
-    //  timeUnit: '1s',
-    //  duration: '5m',
-    //  startTime: '5m',
-    //  preAllocatedVUs: 50,
-    //  maxVUs: 100,
-    //  exec: 'mediumLoadScenario',
-    //},
-    // Escenario 3 - Baja carga.
-    //low_load: {
-    //  executor: 'constant-arrival-rate',
-    //  rate: 70, // 10 Harbor + 10 Artifactory + 25 Vault + 25 Keycloak + margen
-    //  timeUnit: '1s',
-    //  duration: '5m',
-    //  startTime: '10m',
-    //  preAllocatedVUs: 25,
-    //  maxVUs: 50,
-    //  exec: 'lowLoadScenario',
-    //},
+    medium_load: {
+      executor: 'constant-arrival-rate',
+      rate: 130, // 15 Harbor + 15 Artifactory + 50 Vault + 50 Keycloak + margen
+      timeUnit: '1s',
+      duration: '5m',
+      startTime: '5m',
+      preAllocatedVUs: 50,
+      maxVUs: 100,
+      exec: 'mediumLoadScenario',
+    },
+    // Escenario 3 - Baja carga
+    low_load: {
+      executor: 'constant-arrival-rate',
+      rate: 70, // 10 Harbor + 10 Artifactory + 25 Vault + 25 Keycloak + margen
+      timeUnit: '1s',
+      duration: '5m',
+      startTime: '10m',
+      preAllocatedVUs: 25,
+      maxVUs: 50,
+      exec: 'lowLoadScenario',
+    },
   },
   thresholds: {
     // Umbrales globales
@@ -92,22 +83,22 @@ export let options = {
 // Configuración de servicios
 // ======================
 const HARBOR_URL = __ENV.HARBOR_URL || 'https://test-nuam-registry.coffeesoft.org';
-const HARBOR_USER = __ENV.HARBOR_USER || 'admin';
-const HARBOR_PASS = __ENV.HARBOR_PASS || 'r7Y5mQBwsM2lIj0';
+const HARBOR_USER = __ENV.HARBOR_USER || 'XXXXXXXX'; //---> # Solicitar al equipo de arqutiectura DevOps.
+const HARBOR_PASS = __ENV.HARBOR_PASS || 'XXXXXXXX'; //---> # Solicitar al equipo de arqutiectura DevOps.
 const HARBOR_PROJECT = __ENV.HARBOR_PROJECT || 'library';
 const HARBOR_IMAGE = __ENV.HARBOR_IMAGE || 'test-image';
 const HARBOR_TAG = __ENV.HARBOR_TAG || '30mb';
 
 const ARTIFACTORY_URL = __ENV.ARTIFACTORY_URL || 'https://test-nuam-artifactory.coffeesoft.org/ui/native/k6-prueba/';
-const ARTIFACTORY_USER = __ENV.ARTIFACTORY_USER || 'admin';
-const ARTIFACTORY_PASS = __ENV.ARTIFACTORY_PASS || 'Nuam123.*';
+const ARTIFACTORY_USER = __ENV.ARTIFACTORY_USER || 'XXXXXXXX'; //---> # Solicitar al equipo de arqutiectura DevOps.
+const ARTIFACTORY_PASS = __ENV.ARTIFACTORY_PASS || 'XXXXXXXX'; //---> # Solicitar al equipo de arqutiectura DevOps.
 const ARTIFACTORY_REPO = __ENV.ARTIFACTORY_REPO || 'k6-prueba';
 const ARTIFACTORY_FILES = [
   'test/testfile-30mb.bin'
 ];
 
 const VAULT_URL = __ENV.VAULT_URL || 'http://localhost:8200';
-const VAULT_TOKEN = __ENV.VAULT_TOKEN || 'hvs.wy9yDkSXpszNTDWfNxNMswQo';
+const VAULT_TOKEN = __ENV.VAULT_TOKEN || 'XXXXXXXX'; //---> # Solicitar al equipo de arqutiectura DevOps.
 const VAULT_SECRET_PATHS = [
   __ENV.VAULT_SECRET_PATH || '/v1/kv_Production/data/data/testingk6'
 ];
@@ -115,8 +106,8 @@ const VAULT_SECRET_PATHS = [
 const KEYCLOAK_URL = __ENV.KEYCLOAK_URL || 'https://test-nuam-kc.coffeesoft.org';
 const KEYCLOAK_REALM = __ENV.KEYCLOAK_REALM || 'master';
 const KEYCLOAK_CLIENT_ID = __ENV.KEYCLOAK_CLIENT_ID || 'admin-cli';
-const KEYCLOAK_USER = __ENV.KEYCLOAK_USER || 'admin';
-const KEYCLOAK_PASS = __ENV.KEYCLOAK_PASS || 'c659036218da417b9798c8ff97a0708d';
+const KEYCLOAK_USER = __ENV.KEYCLOAK_USER || 'XXXXXXXX'; //---> # Solicitar al equipo de arqutiectura DevOps.
+const KEYCLOAK_PASS = __ENV.KEYCLOAK_PASS || 'XXXXXXXX'; //---> # Solicitar al equipo de arqutiectura DevOps.
 
 // ======================
 // Funciones auxiliares
@@ -168,66 +159,34 @@ function validateVaultResponse(response) {
 // ======================
 // Funciones de prueba
 // ======================
+// ======================
+// Funciones de prueba
+// ======================
 function testHarbor() {
   const start = new Date();
   let success = false;
   
+  if (!dockerLogin()) {
+    check(false, { 'docker login failed': false });
+    errorRate.add(1);
+    errorCounter.add(1);
+    return false;
+  }
+    
+  const uniqueTag = 'latest' + '-' + new Date().getTime();
+  const fullImageName = HARBOR_URL + '/' + HARBOR_PROJECT + '/ubuntu/' + new Date().getTime() + '/' + HARBOR_IMAGE + ':' + uniqueTag;
+  const sourceImage = HARBOR_IMAGE + ':latest';
+  
   try {
-    // 1. Obtener manifiesto
-    const manifestUrl = `${HARBOR_URL}/v2/${HARBOR_PROJECT}/${HARBOR_IMAGE}/manifests/${HARBOR_TAG}`;
-    const manifestParams = {
-      ...getHarborAuthHeaders(),
-      headers: {
-        ...getHarborAuthHeaders().headers,
-        'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
-      },
-      timeout: '60s'
-    };
-
-    const manifestRes = http.get(manifestUrl, manifestParams);
+    // Tag the image
+    exec.command('docker', ['tag', sourceImage, fullImageName]);
     
-    const manifestCheck = check(manifestRes, {
-      'harbor pull manifest success': (r) => r.status === 200,
-      'harbor manifest valid': (r) => {
-        try {
-          const json = r.json();
-          return json && json.schemaVersion === 2;
-        } catch (e) {
-          return false;
-        }
-      }
-    }, { service: 'harbor' });
-
-    // 2. Descargar capa si el manifiesto es válido
-    if (manifestCheck && manifestRes.status === 200) {
-      const manifest = manifestRes.json();
-      const layers = manifest.layers || [];
-      
-      if (layers.length > 0) {
-        const layerUrl = `${HARBOR_URL}/v2/${HARBOR_PROJECT}/${HARBOR_IMAGE}/blobs/${layers[0].digest}`;
-        const layerParams = {
-          ...getHarborAuthHeaders(),
-          headers: {
-            ...getHarborAuthHeaders().headers,
-            'Accept': 'application/octet-stream'
-          },
-          timeout: '120s'
-        };
-        
-        const layerRes = http.get(layerUrl, layerParams);
-        
-        check(layerRes, {
-          'harbor layer download success': (r) => r.status === 200,
-          'harbor layer size valid': (r) => {
-            const compressedSize = parseInt(r.headers['Content-Length'] || '0');
-            return compressedSize >= 28*1024*1024 && compressedSize <= 50*1024*1024;
-          }
-        }, { service: 'harbor' });
-      }
-    }
+    // Push the image
+    exec.command('docker', ['push', fullImageName]);
     
-    success = manifestCheck;
-  } catch (e) {
+    success = true;
+  } catch (error) {
+    console.error(`Error during harbor operations: ${error}`);
     success = false;
   }
   
@@ -241,6 +200,17 @@ function testHarbor() {
   }
   
   return success;
+}
+
+function dockerLogin() {
+  try {
+    const cmd = `docker login ${HARBOR_URL} -u ${HARBOR_USER} -p ${HARBOR_PASS}`;
+    exec.command('sh', ['-c', cmd]);
+    return true;
+  } catch (error) {
+    console.error(`Error during Docker login: ${error}`);
+    return false;
+  }
 }
 
 function testArtifactory() {
